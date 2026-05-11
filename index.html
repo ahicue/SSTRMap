@@ -84,30 +84,6 @@
       padding: 12px;
     }
 
-    .stats {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-    }
-
-    .stat {
-      background: #f8fbf4;
-      border: 1px solid #dde4d2;
-      border-radius: 10px;
-      padding: 10px;
-    }
-
-    .stat-label {
-      font-size: 12px;
-      color: var(--ink-soft);
-    }
-
-    .stat-value {
-      margin-top: 4px;
-      font-size: 20px;
-      font-weight: 700;
-    }
-
     .btns {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -219,6 +195,13 @@
       color: #143f33;
     }
 
+    .time-summary {
+      margin: 0;
+      font-size: 12px;
+      color: #3d5a50;
+      line-height: 1.4;
+    }
+
     .mission-ok {
       color: #0f7b52;
       font-weight: 700;
@@ -247,6 +230,33 @@
       flex: 1;
       min-width: 0;
       word-break: break-word;
+    }
+
+    .point-item-time {
+      margin-top: 4px;
+      font-size: 11px;
+      color: #4d675f;
+    }
+
+    .rest-input {
+      width: 46px;
+      border: 1px solid #ced9d0;
+      border-radius: 8px;
+      padding: 4px 6px;
+      font-size: 12px;
+      color: #20302b;
+      background: #fff;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .rest-control {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      color: #3f5d53;
+      flex-shrink: 0;
     }
 
     .delete-point-btn {
@@ -435,6 +445,10 @@
         font-size: 14px;
       }
 
+      .rest-input {
+        width: 56px;
+      }
+
       .type-filter-list {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
@@ -508,22 +522,13 @@
         <div id="typeFilterList" class="type-filter-list"></div>
       </section>
 
-        <section class="card stats">
-          <div class="stat">
-            <div class="stat-label">已选点数</div>
-            <div id="pointCount" class="stat-value">0</div>
-          </div>
-          <div class="stat">
-            <div class="stat-label">路线里程</div>
-            <div id="distanceKm" class="stat-value">0.00 km</div>
-          </div>
-        </section>
+
 
       <section class="card">
         <p class="subtitle" style="margin-bottom:8px;">SSTR2026 积分计算</p>
         <div class="score-card" style="margin-bottom:8px;">
           <div class="score-pill">总积分<strong id="scoreTotal">0 pt</strong></div>
-          <div class="score-pill">计分点位<strong id="scoreCounted">0</strong></div>
+          <div class="score-pill">路线<strong id="distanceKm">0.00 km</strong></div>
         </div>
         <ul id="missionList" class="point-list compact-list" style="margin-bottom:8px;"></ul>
         <p class="subtitle" style="margin-bottom:8px;">スペシャルデザイン版 追加达成</p>
@@ -534,6 +539,7 @@
       <section class="card">
         <p class="subtitle" style="margin-bottom:8px;">路线点列表</p>
         <ul id="pointList" class="point-list"></ul>
+        <p id="timeSummaryText" class="time-summary" style="margin-top:8px;">请先设置起点并添加路线点。</p>
       </section>
 
         <p id="statusText" class="status"></p>
@@ -556,6 +562,11 @@
   <script>
     const STORAGE_KEY = "sstr-route-2026";
     const OSRM_BASE_URL = "https://router.project-osrm.org";
+    const SUNRISE_API_URL = "https://api.sunrise-sunset.org/json";
+    const STRAIGHT_ROUTE_SPEED_KMH = 50;
+    const EVENT_DATE_YEAR = 2026;
+    const EVENT_DATE_MONTH = 4;
+    const EVENT_DATE_DAY = 30;
     const FILTER_CATEGORIES = [
       "指定道の駅",
       "指定能登復興応援",
@@ -575,22 +586,23 @@
     let checkpointLayer = null;
     let goalLayer = null;
     let routeRenderToken = 0;
+    let lastSegmentMinutes = [];
+    let sunriseRequestToken = 0;
     let longPressTimer = null;
     let longPressTriggered = false;
     let ignoreNextMapClick = false;
 
     const LONG_PRESS_MS = 650;
 
-    const pointCountEl = document.getElementById("pointCount");
     const distanceKmEl = document.getElementById("distanceKm");
     const pointListEl = document.getElementById("pointList");
     const statusTextEl = document.getElementById("statusText");
     const typeFilterListEl = document.getElementById("typeFilterList");
     const scoreTotalEl = document.getElementById("scoreTotal");
-    const scoreCountedEl = document.getElementById("scoreCounted");
     const missionListEl = document.getElementById("missionList");
     const specialMissionListEl = document.getElementById("specialMissionList");
     const scoreBreakdownEl = document.getElementById("scoreBreakdown");
+    const timeSummaryTextEl = document.getElementById("timeSummaryText");
     const panelEl = document.getElementById("controlPanel");
     const togglePanelBtnEl = document.getElementById("togglePanelBtn");
 
@@ -797,7 +809,6 @@
     function renderScoreBoard() {
       const summary = calculateScoreSummary();
       scoreTotalEl.textContent = summary.totalPoints + " pt";
-      scoreCountedEl.textContent = String(summary.countedStops);
 
       const missionRows = [
         {
@@ -918,11 +929,249 @@
       return total;
     }
 
+    function clampRestMinutes(value) {
+      const num = Number(value);
+      if (!Number.isFinite(num) || num < 0) {
+        return 0;
+      }
+      return Math.round(num);
+    }
+
+    function formatTimeLabel(date) {
+      const hh = String(date.getHours()).padStart(2, "0");
+      const mm = String(date.getMinutes()).padStart(2, "0");
+      return hh + ":" + mm;
+    }
+
+    function getStraightSegmentMinutes(points) {
+      if (points.length < 2) {
+        return [];
+      }
+      const mins = [];
+      for (let i = 1; i < points.length; i += 1) {
+        const distanceKm = haversineDistanceKm(points[i - 1], points[i]);
+        const driveMin = (distanceKm / STRAIGHT_ROUTE_SPEED_KMH) * 60;
+        mins.push(Math.max(1, driveMin));
+      }
+      return mins;
+    }
+
+    function getActiveSegmentMinutes() {
+      if (routePoints.length < 2) {
+        return [];
+      }
+      if (lastSegmentMinutes.length === routePoints.length - 1) {
+        return lastSegmentMinutes;
+      }
+      return getStraightSegmentMinutes(routePoints);
+    }
+
+    function calculateTimePlan() {
+      if (!routePoints.length) {
+        return null;
+      }
+      const startSource = new Date(routePoints[0].time || Date.now());
+      if (!Number.isFinite(startSource.getTime())) {
+        return null;
+      }
+      const startDate = new Date(
+        EVENT_DATE_YEAR,
+        EVENT_DATE_MONTH,
+        EVENT_DATE_DAY,
+        startSource.getHours(),
+        startSource.getMinutes(),
+        0,
+        0
+      );
+
+      const segmentMinutes = getActiveSegmentMinutes();
+      const entries = [];
+      let current = new Date(startDate.getTime());
+      let totalRest = 0;
+      const totalDrive = segmentMinutes.reduce((sum, v) => sum + Number(v || 0), 0);
+
+      for (let i = 0; i < routePoints.length; i += 1) {
+        const p = routePoints[i];
+        const arrival = new Date(current.getTime());
+        const restMinutes = clampRestMinutes(p.restMinutes || 0);
+        totalRest += restMinutes;
+        const departure = new Date(arrival.getTime() + restMinutes * 60000);
+        entries.push({
+          arrival: arrival,
+          departure: departure,
+          restMinutes: restMinutes
+        });
+        if (i < segmentMinutes.length) {
+          current = new Date(departure.getTime() + Number(segmentMinutes[i] || 0) * 60000);
+        }
+      }
+
+      return {
+        entries: entries,
+        totalDriveMinutes: totalDrive,
+        totalRestMinutes: totalRest,
+        finishTime: entries.length ? entries[entries.length - 1].departure : startDate
+      };
+    }
+
+    function renderTimeSummary() {
+      const plan = calculateTimePlan();
+      if (!plan) {
+        timeSummaryTextEl.textContent = "请先设置起点并添加路线点。";
+        return;
+      }
+      const driveH = (plan.totalDriveMinutes / 60).toFixed(1);
+      const finish = formatTimeLabel(plan.finishTime);
+      const startText = plan.entries.length ? formatTimeLabel(plan.entries[0].departure) : "--";
+      timeSummaryTextEl.textContent =
+        "起点出发：" + startText +
+        " ｜ 预计终点：" + finish +
+        " ｜ 行驶约 " + driveH + " 小时" +
+        " ｜ 休息 " + plan.totalRestMinutes + " 分钟";
+    }
+
+    function renderRoutePointList() {
+      const plan = calculateTimePlan();
+      pointListEl.innerHTML = "";
+      routePoints.forEach((p, i) => {
+        const item = document.createElement("li");
+        const row = document.createElement("div");
+        const textWrap = document.createElement("div");
+        const text = document.createElement("span");
+        const timeMeta = document.createElement("div");
+        const restControl = document.createElement("label");
+        const restPrefix = document.createElement("span");
+        const restInput = document.createElement("input");
+        const restSuffix = document.createElement("span");
+        const delBtn = document.createElement("button");
+        const scoreRule = getScoreRuleFromPoint(p);
+        const listLabel = i === 0 ? "S" : String(i);
+
+        item.className = "point-item";
+        row.className = "point-item-row";
+        textWrap.className = "point-item-text";
+        text.className = "point-item-text";
+        const baseText =
+          listLabel + ". " + (p.name || "自定义点") +
+          " - " + getCheckpointCategory(p) + " - " + scoreRule.category + " / " + scoreRule.points + "pt";
+
+        timeMeta.className = "point-item-time";
+        if (plan && plan.entries[i]) {
+          const entry = plan.entries[i];
+          if (i === 0) {
+            text.textContent = baseText + " ｜ 出发 " + formatTimeLabel(entry.departure);
+            timeMeta.textContent = "起点";
+          } else {
+            text.textContent =
+              baseText +
+              " ｜ 到达 " + formatTimeLabel(entry.arrival) +
+              " ｜ 出发 " + formatTimeLabel(entry.departure);
+            timeMeta.textContent = "";
+          }
+        } else {
+          text.textContent = baseText;
+          timeMeta.textContent = "到离时间会根据起点创建时间自动计算";
+        }
+
+        restControl.className = "rest-control";
+        restPrefix.textContent = "休息";
+        restSuffix.textContent = "分";
+
+        restInput.className = "rest-input";
+        restInput.type = "number";
+        restInput.min = "0";
+        restInput.max = "600";
+        restInput.step = "5";
+        restInput.value = String(clampRestMinutes(p.restMinutes || 0));
+        restInput.title = "休息分钟";
+        restInput.addEventListener("change", () => {
+          p.restMinutes = clampRestMinutes(restInput.value);
+          saveRouteToStorage();
+          renderRoutePointList();
+          renderTimeSummary();
+        });
+
+        restControl.appendChild(restPrefix);
+        restControl.appendChild(restInput);
+        restControl.appendChild(restSuffix);
+
+        delBtn.className = "delete-point-btn";
+        delBtn.type = "button";
+        delBtn.textContent = "删除";
+        delBtn.addEventListener("click", () => deletePointAt(i));
+
+        textWrap.appendChild(text);
+        textWrap.appendChild(timeMeta);
+        row.appendChild(textWrap);
+        if (i !== 0) {
+          row.appendChild(restControl);
+        }
+        row.appendChild(delBtn);
+        item.appendChild(row);
+        pointListEl.appendChild(item);
+      });
+    }
+
+    async function applySunriseToStartPoint() {
+      if (!routePoints.length) {
+        return;
+      }
+      const requestToken = ++sunriseRequestToken;
+      const start = routePoints[0];
+      const dateText =
+        String(EVENT_DATE_YEAR) + "-" +
+        String(EVENT_DATE_MONTH + 1).padStart(2, "0") + "-" +
+        String(EVENT_DATE_DAY).padStart(2, "0");
+      const url =
+        SUNRISE_API_URL +
+        "?lat=" + encodeURIComponent(String(start.lat)) +
+        "&lng=" + encodeURIComponent(String(start.lng)) +
+        "&date=" + encodeURIComponent(dateText) +
+        "&formatted=0";
+
+      try {
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) {
+          throw new Error("sunrise http error");
+        }
+        const data = await res.json();
+        if (!data || data.status !== "OK" || !data.results || !data.results.sunrise) {
+          throw new Error("sunrise invalid result");
+        }
+        const sunriseUtc = new Date(data.results.sunrise);
+        if (!Number.isFinite(sunriseUtc.getTime())) {
+          throw new Error("sunrise invalid date");
+        }
+
+        if (requestToken !== sunriseRequestToken || !routePoints.length) {
+          return;
+        }
+
+        const sunriseLocal = new Date(
+          EVENT_DATE_YEAR,
+          EVENT_DATE_MONTH,
+          EVENT_DATE_DAY,
+          sunriseUtc.getHours(),
+          sunriseUtc.getMinutes(),
+          0,
+          0
+        );
+        routePoints[0].time = sunriseLocal.toISOString();
+        saveRouteToStorage();
+        renderRoutePointList();
+        renderTimeSummary();
+        showStatus("起点出发时间已自动设置为起点日出时间", false);
+      } catch (err) {
+        showStatus("获取起点日出时间失败，已保留当前起点时间", true);
+      }
+    }
+
     function getStraightRouteData(points) {
       const latLngs = points.map((p) => [p.lat, p.lng]);
       return {
         latLngs: latLngs,
-        distanceKm: getTotalDistanceKm()
+        distanceKm: getTotalDistanceKm(),
+        segmentMinutes: getStraightSegmentMinutes(points)
       };
     }
 
@@ -952,7 +1201,8 @@
       const latLngs = route.geometry.coordinates.map((coord) => [coord[1], coord[0]]);
       return {
         latLngs: latLngs,
-        distanceKm: Number(route.distance || 0) / 1000
+        distanceKm: Number(route.distance || 0) / 1000,
+        durationMinutes: Number(route.duration || 0) / 60
       };
     }
 
@@ -963,6 +1213,7 @@
 
       const mergedLatLngs = [];
       let totalKm = 0;
+      const segmentMinutes = [];
 
       for (let i = 1; i < points.length; i += 1) {
         if (renderToken !== routeRenderToken) {
@@ -975,11 +1226,13 @@
           mergedLatLngs.push(...segment.latLngs.slice(1));
         }
         totalKm += segment.distanceKm;
+        segmentMinutes.push(Number(segment.durationMinutes || 0));
       }
 
       return {
         latLngs: mergedLatLngs,
-        distanceKm: totalKm
+        distanceKm: totalKm,
+        segmentMinutes: segmentMinutes
       };
     }
 
@@ -1007,6 +1260,7 @@
       const currentToken = ++routeRenderToken;
       routeMarkers.forEach((marker) => map.removeLayer(marker));
       routeMarkers.length = 0;
+      lastSegmentMinutes = [];
 
       if (routeLine) {
         map.removeLayer(routeLine);
@@ -1024,32 +1278,10 @@
         routeMarkers.push(marker);
       });
 
-      pointCountEl.textContent = String(routePoints.length);
-
-      pointListEl.innerHTML = "";
-      routePoints.forEach((p, i) => {
-        const item = document.createElement("li");
-        const row = document.createElement("div");
-        const text = document.createElement("span");
-        const delBtn = document.createElement("button");
-        const scoreRule = getScoreRuleFromPoint(p);
-        const listLabel = i === 0 ? "S" : String(i);
-        item.className = "point-item";
-        row.className = "point-item-row";
-        text.className = "point-item-text";
-        text.textContent = listLabel + ". " + (p.name || "自定义点") + " (" + p.lat.toFixed(5) + ", " + p.lng.toFixed(5) + ") - " + getCheckpointCategory(p) + " - " + scoreRule.category + " / " + scoreRule.points + "pt";
-        delBtn.className = "delete-point-btn";
-        delBtn.type = "button";
-        delBtn.textContent = "删除";
-        delBtn.addEventListener("click", () => deletePointAt(i));
-        row.appendChild(text);
-        row.appendChild(delBtn);
-        item.appendChild(row);
-        pointListEl.appendChild(item);
-      });
-
       if (routePoints.length < 2) {
         distanceKmEl.textContent = "0.00 km";
+        renderRoutePointList();
+        renderTimeSummary();
         renderScoreBoard();
         saveRouteToStorage();
         return;
@@ -1072,6 +1304,12 @@
         showStatus("道路路线计算失败，已回退为直线连接", true);
       }
 
+      if (Array.isArray(routeData.segmentMinutes)) {
+        lastSegmentMinutes = routeData.segmentMinutes.slice();
+      } else {
+        lastSegmentMinutes = getStraightSegmentMinutes(routePoints);
+      }
+
       routeLine = L.polyline(routeData.latLngs, {
         color: "#0f8a5f",
         weight: 4,
@@ -1079,6 +1317,9 @@
         lineJoin: "round"
       }).addTo(map);
       distanceKmEl.textContent = routeData.distanceKm.toFixed(2) + " km";
+
+      renderRoutePointList();
+      renderTimeSummary();
 
       renderScoreBoard();
       saveRouteToStorage();
@@ -1098,9 +1339,13 @@
         prefecture: meta && meta.prefecture ? meta.prefecture : null,
         address: meta && meta.address ? meta.address : null,
         description: meta && meta.description ? meta.description : null,
-        add_info: meta && meta.add_info ? meta.add_info : null
+        add_info: meta && meta.add_info ? meta.add_info : null,
+        restMinutes: 0
       });
       redrawRoute();
+      if (routePoints.length === 1) {
+        applySunriseToStartPoint();
+      }
       collapsePanelOnMobile();
     }
 
@@ -1119,9 +1364,11 @@
         prefecture: meta && meta.prefecture ? meta.prefecture : null,
         address: meta && meta.address ? meta.address : null,
         description: meta && meta.description ? meta.description : null,
-        add_info: meta && meta.add_info ? meta.add_info : null
+        add_info: meta && meta.add_info ? meta.add_info : null,
+        restMinutes: 0
       });
       redrawRoute();
+      applySunriseToStartPoint();
       collapsePanelOnMobile();
       showStatus("起点已设置，可继续添加后续路线点", false);
     }
@@ -1173,7 +1420,7 @@
     }
 
     function saveRouteToStorage() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(routePoints));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ routePoints: routePoints }));
     }
 
     function restoreRouteFromStorage() {
@@ -1183,10 +1430,11 @@
       }
       try {
         const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed)) {
+        const points = Array.isArray(parsed) ? parsed : parsed && Array.isArray(parsed.routePoints) ? parsed.routePoints : null;
+        if (!points) {
           return;
         }
-        parsed.forEach((p) => {
+        points.forEach((p) => {
           if (Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng))) {
             routePoints.push({
               lat: Number(p.lat),
@@ -1201,7 +1449,8 @@
               prefecture: p.prefecture || null,
               address: p.address || null,
               description: p.description || null,
-              add_info: p.add_info || null
+              add_info: p.add_info || null,
+              restMinutes: clampRestMinutes(p.restMinutes || 0)
             });
           }
         });
@@ -1233,6 +1482,99 @@
           logging: false,
           scale: window.devicePixelRatio > 1 ? 2 : 1
         });
+
+        // html2canvas sometimes misses Leaflet SVG paths, so draw the route explicitly.
+        if (routeLine && typeof routeLine.getLatLngs === "function") {
+          const rawLatLngs = routeLine.getLatLngs();
+          const routeLatLngs = [];
+          const stack = Array.isArray(rawLatLngs) ? rawLatLngs.slice() : [];
+          while (stack.length > 0) {
+            const item = stack.shift();
+            if (Array.isArray(item)) {
+              stack.unshift(...item);
+            } else if (item && Number.isFinite(item.lat) && Number.isFinite(item.lng)) {
+              routeLatLngs.push(item);
+            }
+          }
+
+          if (routeLatLngs.length >= 2) {
+            const ctx = canvas.getContext("2d");
+            if (ctx) {
+              const scaleX = canvas.width / mapEl.clientWidth;
+              const scaleY = canvas.height / mapEl.clientHeight;
+              ctx.save();
+              ctx.lineJoin = "round";
+              ctx.lineCap = "round";
+              ctx.strokeStyle = "#0f8a5f";
+              ctx.globalAlpha = 0.88;
+              ctx.lineWidth = 4 * Math.max(scaleX, scaleY);
+              ctx.beginPath();
+
+              routeLatLngs.forEach((latLng, idx) => {
+                const p = map.latLngToContainerPoint(latLng);
+                const x = p.x * scaleX;
+                const y = p.y * scaleY;
+                if (idx === 0) {
+                  ctx.moveTo(x, y);
+                } else {
+                  ctx.lineTo(x, y);
+                }
+              });
+
+              ctx.stroke();
+              ctx.restore();
+            }
+          }
+        }
+
+        const watermarkCtx = canvas.getContext("2d");
+        if (watermarkCtx) {
+          const summary = calculateScoreSummary();
+          const exportNow = new Date();
+          const dateText =
+            exportNow.getFullYear() + "-" +
+            String(exportNow.getMonth() + 1).padStart(2, "0") + "-" +
+            String(exportNow.getDate()).padStart(2, "0") + " " +
+            String(exportNow.getHours()).padStart(2, "0") + ":" +
+            String(exportNow.getMinutes()).padStart(2, "0");
+          const distanceText = distanceKmEl.textContent || "0.00 km";
+          const watermarkLines = [
+            "SSTR 2026 Route",
+            "时间: " + dateText,
+            "里程: " + distanceText,
+            "总积分: " + summary.totalPoints + " pt",
+            "点位数: " + routePoints.length
+          ];
+
+          const fontSize = Math.max(14, Math.round(canvas.width * 0.014));
+          const lineHeight = Math.round(fontSize * 1.45);
+          const pad = Math.round(fontSize * 0.75);
+          const boxX = pad;
+          const boxY = pad;
+
+          watermarkCtx.save();
+          watermarkCtx.font = "600 " + fontSize + "px 'Noto Sans SC', sans-serif";
+          const maxLineWidth = watermarkLines.reduce((maxW, line) => {
+            return Math.max(maxW, watermarkCtx.measureText(line).width);
+          }, 0);
+          const boxW = Math.ceil(maxLineWidth + pad * 2);
+          const boxH = Math.ceil(lineHeight * watermarkLines.length + pad * 1.6);
+
+          watermarkCtx.fillStyle = "rgba(20, 35, 31, 0.62)";
+          watermarkCtx.fillRect(boxX, boxY, boxW, boxH);
+          watermarkCtx.strokeStyle = "rgba(224, 241, 233, 0.85)";
+          watermarkCtx.lineWidth = Math.max(1, Math.round(fontSize * 0.12));
+          watermarkCtx.strokeRect(boxX, boxY, boxW, boxH);
+
+          watermarkCtx.fillStyle = "#f4fff9";
+          watermarkLines.forEach((line, idx) => {
+            const textX = boxX + pad;
+            const textY = boxY + pad + lineHeight * (idx + 0.7);
+            watermarkCtx.fillText(line, textX, textY);
+          });
+          watermarkCtx.restore();
+        }
+
         const dataUrl = canvas.toDataURL("image/png");
         const now = new Date();
         const stamp = now.getFullYear() +
@@ -1487,6 +1829,7 @@
     renderTypeFilters();
     restoreRouteFromStorage();
     redrawRoute();
+    renderTimeSummary();
     loadCheckpoints();
   </script>
 </body>
