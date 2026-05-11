@@ -56,6 +56,13 @@
       overflow-y: auto;
     }
 
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
     .title {
       margin: 0;
       font-size: 24px;
@@ -107,6 +114,12 @@
       gap: 8px;
     }
 
+    .filter-action-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
     button {
       border: none;
       border-radius: 10px;
@@ -116,6 +129,13 @@
       cursor: pointer;
       transition: transform 0.18s ease, filter 0.18s ease;
       text-align: center;
+      touch-action: manipulation;
+    }
+
+    .panel-toggle {
+      display: none;
+      min-width: 90px;
+      flex-shrink: 0;
     }
 
     button:hover {
@@ -154,9 +174,14 @@
       font-size: 11px;
     }
 
+    #specialMissionList {
+      max-height: none;
+      overflow: visible;
+    }
+
     .type-filter-list {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 6px 10px;
     }
 
@@ -211,6 +236,31 @@
       color: #31443d;
     }
 
+    .point-item-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .point-item-text {
+      flex: 1;
+      min-width: 0;
+      word-break: break-word;
+    }
+
+    .delete-point-btn {
+      border: 1px solid #e7bdb3;
+      background: #fff3ef;
+      color: #b94728;
+      border-radius: 8px;
+      padding: 4px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
     .point-item:last-child {
       border-bottom: none;
     }
@@ -234,8 +284,9 @@
 
     .floating-tip {
       position: absolute;
-      top: 16px;
+      top: auto;
       right: 16px;
+      bottom: 16px;
       z-index: 950;
       background: rgba(255, 253, 248, 0.92);
       border: 1px solid var(--line);
@@ -247,19 +298,62 @@
       max-width: 300px;
     }
 
+    .map-fab-group {
+      position: absolute;
+      right: 16px;
+      bottom: 92px;
+      z-index: 960;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .undo-fab,
+    .locate-fab,
+    .export-fab {
+      min-width: 84px;
+      min-height: 44px;
+      border-radius: 999px;
+      background: #0f8a5f;
+      color: #fff;
+      border: 2px solid #d8f2e7;
+      box-shadow: 0 8px 20px rgba(15, 59, 44, 0.28);
+      font-size: 14px;
+      font-weight: 700;
+      padding: 0 16px;
+    }
+
+    .locate-fab {
+      background: #357fdb;
+      border-color: #dce9ff;
+      box-shadow: 0 8px 20px rgba(20, 48, 88, 0.24);
+    }
+
+    .export-fab {
+      background: #4b6c5f;
+      border-color: #dde8e2;
+      box-shadow: 0 8px 20px rgba(22, 51, 41, 0.24);
+      text-align: left;
+    }
+
     .route-dot {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 24px;
-      height: 24px;
+      width: 30px;
+      height: 30px;
       border-radius: 50%;
-      font-size: 11px;
+      font-size: 13px;
       font-weight: 700;
       color: #fff;
       background: #137a59;
-      border: 2px solid #e4ffef;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+      border: 3px solid #e4ffef;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.28);
+    }
+
+    .route-dot.start {
+      background: #d84a3a;
+      border-color: #ffe8e4;
     }
 
     .checkpoint-dot {
@@ -273,67 +367,157 @@
 
     @media (max-width: 920px) {
       .app {
-        grid-template-columns: 1fr;
-        grid-template-rows: auto 1fr;
+        display: block;
       }
 
       .panel {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        right: 10px;
         border-right: none;
-        border-bottom: 1px solid var(--line);
-        padding: 16px;
-        max-height: 44vh;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 12px;
+        max-height: min(78dvh, 680px);
+        transition: max-height 0.25s ease;
+      }
+
+      .panel.mobile-collapsed {
+        max-height: 68px;
+        overflow: hidden;
+      }
+
+      .panel.mobile-collapsed .panel-body {
+        display: none;
+      }
+
+      .panel-head {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        padding-bottom: 4px;
+        background: linear-gradient(170deg, rgba(255, 255, 255, 0.98), rgba(248, 252, 245, 0.98));
+      }
+
+      .panel-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .panel-body {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
       }
 
       .title {
-        font-size: 21px;
+        font-size: 19px;
+        margin-right: auto;
       }
 
       .point-list {
-        max-height: 22vh;
+        max-height: 19vh;
+      }
+
+      .btns {
+        grid-template-columns: 1fr;
+      }
+
+      .filter-action-row {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      button,
+      .delete-point-btn {
+        min-height: 42px;
+        font-size: 14px;
+      }
+
+      .type-filter-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .type-filter-item {
+        min-height: 36px;
+        font-size: 13px;
+      }
+
+      .type-filter-item input {
+        width: 18px;
+        height: 18px;
       }
 
       .floating-tip {
         left: 12px;
         right: 12px;
-        top: 10px;
+        top: auto;
+        bottom: 12px;
         max-width: none;
+        font-size: 11px;
+      }
+
+      .map-fab-group {
+        right: 12px;
+        bottom: 84px;
+        gap: 8px;
+      }
+
+      .undo-fab,
+      .locate-fab,
+      .export-fab {
+        min-width: 82px;
+        min-height: 42px;
+      }
+
+      .map-wrap {
+        height: 100dvh;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .stats,
+      .score-card {
+        grid-template-columns: 1fr;
+      }
+
+      .stat-value {
+        font-size: 18px;
       }
     }
   </style>
 </head>
 <body>
   <div class="app">
-    <aside class="panel">
-      <h1 class="title">SSTR 2026 路线绘制</h1>
-      <p class="subtitle">可先设置起点，再连续绘制路线。也可以点击橙色站点将其设为起点或加入路线。</p>
+    <aside id="controlPanel" class="panel">
+      <div class="panel-head">
+        <h1 class="title">SSTR 2026 路线绘制</h1>
+        <button id="togglePanelBtn" class="panel-toggle secondary" type="button" aria-expanded="true" aria-controls="panelBody">收起面板</button>
+      </div>
 
-      <section class="card stats">
-        <div class="stat">
-          <div class="stat-label">已选点数</div>
-          <div id="pointCount" class="stat-value">0</div>
-        </div>
-        <div class="stat">
-          <div class="stat-label">路线里程</div>
-          <div id="distanceKm" class="stat-value">0.00 km</div>
-        </div>
-      </section>
-
-      <section class="card btns">
-        <button id="setStartBtn" class="primary" type="button">设置起点</button>
-        <button id="undoBtn" class="secondary" type="button">撤销上一步</button>
-        <button id="clearBtn" class="danger" type="button">清空路线</button>
-        <button id="exportGpxBtn" class="secondary" type="button">导出 GPX</button>
-        <button id="locateBtn" class="secondary" type="button">定位到路线</button>
-      </section>
+      <div id="panelBody" class="panel-body">
+        <p class="subtitle">请通过地图上的站点点位添加路线。你也可以长按地图（手机）或右键地图（电脑）快速设置起点。</p>
 
       <section class="card">
         <p class="subtitle" style="margin-bottom:8px;">按类型筛选点位</p>
-        <div class="btns" style="margin-bottom:8px;">
-          <button id="selectAllTypesBtn" class="secondary" type="button">全选类型</button>
+        <div class="filter-action-row" style="margin-bottom:8px;">
+          <button id="selectAllTypesBtn" class="secondary" type="button">全选</button>
           <button id="clearTypesBtn" class="secondary" type="button">全不选</button>
         </div>
         <div id="typeFilterList" class="type-filter-list"></div>
       </section>
+
+        <section class="card stats">
+          <div class="stat">
+            <div class="stat-label">已选点数</div>
+            <div id="pointCount" class="stat-value">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">路线里程</div>
+            <div id="distanceKm" class="stat-value">0.00 km</div>
+          </div>
+        </section>
 
       <section class="card">
         <p class="subtitle" style="margin-bottom:8px;">SSTR2026 积分计算</p>
@@ -352,18 +536,26 @@
         <ul id="pointList" class="point-list"></ul>
       </section>
 
-      <p id="statusText" class="status"></p>
+        <p id="statusText" class="status"></p>
+      </div>
     </aside>
 
     <div class="map-wrap">
       <div id="map"></div>
-      <div class="floating-tip">左键单击地图添加路线点。拖动地图后继续点选即可。</div>
+      <div class="floating-tip">默认只能点站点加入路线。快速设起点：手机长按地图，或电脑右键地图。</div>
+      <div class="map-fab-group">
+        <button id="exportMapBtn" class="export-fab" type="button">导出路线图</button>
+        <button id="locateFabBtn" class="locate-fab" type="button">定位</button>
+        <button id="undoFabBtn" class="undo-fab" type="button">撤销</button>
+      </div>
     </div>
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script>
     const STORAGE_KEY = "sstr-route-2026";
+    const OSRM_BASE_URL = "https://router.project-osrm.org";
     const FILTER_CATEGORIES = [
       "指定道の駅",
       "指定能登復興応援",
@@ -372,8 +564,7 @@
       "SA",
       "PA",
       "自然災害伝承碑",
-      "びっくりボーナスポイント",
-      "ゴール地点"
+      "びっくりボーナスポイント"
     ];
 
     const routePoints = [];
@@ -382,19 +573,26 @@
     const selectedCategories = new Set(FILTER_CATEGORIES);
     let routeLine = null;
     let checkpointLayer = null;
-    let isSettingStart = false;
+    let goalLayer = null;
+    let routeRenderToken = 0;
+    let longPressTimer = null;
+    let longPressTriggered = false;
+    let ignoreNextMapClick = false;
+
+    const LONG_PRESS_MS = 650;
 
     const pointCountEl = document.getElementById("pointCount");
     const distanceKmEl = document.getElementById("distanceKm");
     const pointListEl = document.getElementById("pointList");
     const statusTextEl = document.getElementById("statusText");
-    const setStartBtnEl = document.getElementById("setStartBtn");
     const typeFilterListEl = document.getElementById("typeFilterList");
     const scoreTotalEl = document.getElementById("scoreTotal");
     const scoreCountedEl = document.getElementById("scoreCounted");
     const missionListEl = document.getElementById("missionList");
     const specialMissionListEl = document.getElementById("specialMissionList");
     const scoreBreakdownEl = document.getElementById("scoreBreakdown");
+    const panelEl = document.getElementById("controlPanel");
+    const togglePanelBtnEl = document.getElementById("togglePanelBtn");
 
     const map = L.map("map", {
       zoomControl: true,
@@ -403,12 +601,28 @@
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
-      attribution: "&copy; OpenStreetMap"
+      attribution: "&copy; OpenStreetMap",
+      crossOrigin: true
     }).addTo(map);
 
     function showStatus(message, isError) {
       statusTextEl.textContent = message;
       statusTextEl.style.color = isError ? "#b94728" : "#556f65";
+    }
+
+    function setPanelCollapsed(collapsed) {
+      if (!panelEl || !togglePanelBtnEl) {
+        return;
+      }
+      panelEl.classList.toggle("mobile-collapsed", collapsed);
+      togglePanelBtnEl.textContent = collapsed ? "展开面板" : "收起面板";
+      togglePanelBtnEl.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    }
+
+    function collapsePanelOnMobile() {
+      if (window.matchMedia("(max-width: 920px)").matches) {
+        setPanelCollapsed(true);
+      }
     }
 
     function getCheckpointCategory(point) {
@@ -704,16 +918,93 @@
       return total;
     }
 
-    function createRouteIcon(index) {
+    function getStraightRouteData(points) {
+      const latLngs = points.map((p) => [p.lat, p.lng]);
+      return {
+        latLngs: latLngs,
+        distanceKm: getTotalDistanceKm()
+      };
+    }
+
+    async function fetchRoadSegment(fromPoint, toPoint) {
+      const fromLng = Number(fromPoint.lng);
+      const fromLat = Number(fromPoint.lat);
+      const toLng = Number(toPoint.lng);
+      const toLat = Number(toPoint.lat);
+      const url = OSRM_BASE_URL +
+        "/route/v1/driving/" +
+        fromLng + "," + fromLat + ";" + toLng + "," + toLat +
+        "?overview=full&geometries=geojson";
+
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) {
+        throw new Error("routing http error");
+      }
+      const data = await res.json();
+      if (!data || !Array.isArray(data.routes) || data.routes.length === 0) {
+        throw new Error("routing empty result");
+      }
+      const route = data.routes[0];
+      if (!route.geometry || !Array.isArray(route.geometry.coordinates)) {
+        throw new Error("routing invalid geometry");
+      }
+
+      const latLngs = route.geometry.coordinates.map((coord) => [coord[1], coord[0]]);
+      return {
+        latLngs: latLngs,
+        distanceKm: Number(route.distance || 0) / 1000
+      };
+    }
+
+    async function getRoadRouteData(points, renderToken) {
+      if (points.length < 2) {
+        return getStraightRouteData(points);
+      }
+
+      const mergedLatLngs = [];
+      let totalKm = 0;
+
+      for (let i = 1; i < points.length; i += 1) {
+        if (renderToken !== routeRenderToken) {
+          return null;
+        }
+        const segment = await fetchRoadSegment(points[i - 1], points[i]);
+        if (i === 1) {
+          mergedLatLngs.push(...segment.latLngs);
+        } else {
+          mergedLatLngs.push(...segment.latLngs.slice(1));
+        }
+        totalKm += segment.distanceKm;
+      }
+
+      return {
+        latLngs: mergedLatLngs,
+        distanceKm: totalKm
+      };
+    }
+
+    function createRouteIcon(index, isStart) {
+      const extraClass = isStart ? " start" : "";
+      const label = isStart ? "S" : String(index);
       return L.divIcon({
         className: "",
-        html: '<div class="route-dot">' + index + "</div>",
-        iconSize: [24, 24],
-        iconAnchor: [12, 12]
+        html: '<div class="route-dot' + extraClass + '">' + label + "</div>",
+        iconSize: [30, 30],
+        iconAnchor: [15, 15]
       });
     }
 
-    function redrawRoute() {
+    function createGoalPointIcon() {
+      return L.divIcon({
+        className: "",
+        html: '<div class="route-dot start">G</div>',
+        iconSize: [30, 30],
+        iconAnchor: [15, 15]
+      });
+    }
+
+    async function redrawRoute() {
+      const currentToken = ++routeRenderToken;
       routeMarkers.forEach((marker) => map.removeLayer(marker));
       routeMarkers.length = 0;
 
@@ -721,33 +1012,73 @@
         map.removeLayer(routeLine);
       }
 
-      const latLngs = routePoints.map((p) => [p.lat, p.lng]);
-
       routePoints.forEach((p, i) => {
-        const marker = L.marker([p.lat, p.lng], { icon: createRouteIcon(i + 1) })
+        const isStart = i === 0;
+        const markerNumber = isStart ? 0 : i;
+        const marker = L.marker([p.lat, p.lng], {
+          icon: createRouteIcon(markerNumber, isStart),
+          zIndexOffset: isStart ? 50000 : 10000
+        })
           .addTo(map)
-          .bindPopup("第 " + (i + 1) + " 点<BR>" + (p.name || "自定义点") + "<br>" + getCheckpointCategory(p) + "<br>" + (getScoreRuleFromPoint(p).category || "非计分点"));
+          .bindPopup((isStart ? "起点" : "第 " + i + " 点") + "<BR>" + (p.name || "自定义点") + "<br>" + getCheckpointCategory(p) + "<br>" + (getScoreRuleFromPoint(p).category || "非计分点"));
         routeMarkers.push(marker);
       });
 
-      routeLine = L.polyline(latLngs, {
+      pointCountEl.textContent = String(routePoints.length);
+
+      pointListEl.innerHTML = "";
+      routePoints.forEach((p, i) => {
+        const item = document.createElement("li");
+        const row = document.createElement("div");
+        const text = document.createElement("span");
+        const delBtn = document.createElement("button");
+        const scoreRule = getScoreRuleFromPoint(p);
+        const listLabel = i === 0 ? "S" : String(i);
+        item.className = "point-item";
+        row.className = "point-item-row";
+        text.className = "point-item-text";
+        text.textContent = listLabel + ". " + (p.name || "自定义点") + " (" + p.lat.toFixed(5) + ", " + p.lng.toFixed(5) + ") - " + getCheckpointCategory(p) + " - " + scoreRule.category + " / " + scoreRule.points + "pt";
+        delBtn.className = "delete-point-btn";
+        delBtn.type = "button";
+        delBtn.textContent = "删除";
+        delBtn.addEventListener("click", () => deletePointAt(i));
+        row.appendChild(text);
+        row.appendChild(delBtn);
+        item.appendChild(row);
+        pointListEl.appendChild(item);
+      });
+
+      if (routePoints.length < 2) {
+        distanceKmEl.textContent = "0.00 km";
+        renderScoreBoard();
+        saveRouteToStorage();
+        return;
+      }
+
+      distanceKmEl.textContent = "计算中...";
+      let routeData = null;
+      try {
+        routeData = await getRoadRouteData(routePoints, currentToken);
+      } catch (err) {
+        routeData = null;
+      }
+
+      if (currentToken !== routeRenderToken) {
+        return;
+      }
+
+      if (!routeData || !Array.isArray(routeData.latLngs) || routeData.latLngs.length < 2) {
+        routeData = getStraightRouteData(routePoints);
+        showStatus("道路路线计算失败，已回退为直线连接", true);
+      }
+
+      routeLine = L.polyline(routeData.latLngs, {
         color: "#0f8a5f",
         weight: 4,
         opacity: 0.88,
         lineJoin: "round"
       }).addTo(map);
-
-      pointCountEl.textContent = String(routePoints.length);
-      distanceKmEl.textContent = getTotalDistanceKm().toFixed(2) + " km";
-
-      pointListEl.innerHTML = "";
-      routePoints.forEach((p, i) => {
-        const item = document.createElement("li");
-        const scoreRule = getScoreRuleFromPoint(p);
-        item.className = "point-item";
-        item.textContent = (i + 1) + ". " + (p.name || "自定义点") + " (" + p.lat.toFixed(5) + ", " + p.lng.toFixed(5) + ") - " + getCheckpointCategory(p) + " - " + scoreRule.category + " / " + scoreRule.points + "pt";
-        pointListEl.appendChild(item);
-      });
+      distanceKmEl.textContent = routeData.distanceKm.toFixed(2) + " km";
 
       renderScoreBoard();
       saveRouteToStorage();
@@ -770,6 +1101,7 @@
         add_info: meta && meta.add_info ? meta.add_info : null
       });
       redrawRoute();
+      collapsePanelOnMobile();
     }
 
     function setStartPoint(lat, lng, sourceName, meta) {
@@ -790,14 +1122,26 @@
         add_info: meta && meta.add_info ? meta.add_info : null
       });
       redrawRoute();
+      collapsePanelOnMobile();
       showStatus("起点已设置，可继续添加后续路线点", false);
     }
 
-    function toggleSetStartMode() {
-      isSettingStart = !isSettingStart;
-      setStartBtnEl.textContent = isSettingStart ? "取消设置起点" : "设置起点";
-      setStartBtnEl.className = isSettingStart ? "danger" : "primary";
-      showStatus(isSettingStart ? "设置起点模式已开启：请点击地图或站点" : "已取消设置起点模式", false);
+    function clearLongPressTimer() {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    }
+
+    function scheduleLongPressSetStart(latlng) {
+      clearLongPressTimer();
+      longPressTriggered = false;
+      longPressTimer = setTimeout(() => {
+        longPressTriggered = true;
+        ignoreNextMapClick = true;
+        setStartPoint(latlng.lat, latlng.lng, "长按地图起点");
+        showStatus("已通过长按设置起点", false);
+      }, LONG_PRESS_MS);
     }
 
     function removeLastPoint() {
@@ -810,10 +1154,13 @@
       showStatus("已撤销最后一个点", false);
     }
 
-    function clearRoute() {
-      routePoints.length = 0;
+    function deletePointAt(index) {
+      if (index < 0 || index >= routePoints.length) {
+        return;
+      }
+      routePoints.splice(index, 1);
       redrawRoute();
-      showStatus("路线已清空", false);
+      showStatus("已删除指定点", false);
     }
 
     function fitToRoute() {
@@ -865,51 +1212,46 @@
       }
     }
 
-    function downloadText(filename, text, type) {
-      const blob = new Blob([text], { type: type });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }
-
-    function escapeXml(value) {
-      return String(value)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/\"/g, "&quot;")
-        .replace(/'/g, "&apos;");
-    }
-
-    function exportRouteAsGpx() {
+    async function exportRouteMapImage() {
       if (routePoints.length === 0) {
-        showStatus("路线为空，无法导出", true);
+        showStatus("路线为空，无法导出路线图", true);
         return;
       }
-      const trkpt = routePoints.map((p) => {
-        return '      <trkpt lat="' + p.lat + '" lon="' + p.lng + '"><time>' + escapeXml(p.time || new Date().toISOString()) + "</time></trkpt>";
-      }).join("\n");
 
-      const gpx = [
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
-        "<gpx version=\"1.1\" creator=\"SSTR Route Tool\" xmlns=\"http://www.topografix.com/GPX/1/1\">",
-        "  <metadata><name>SSTR 2026 Route</name><time>" + escapeXml(new Date().toISOString()) + "</time></metadata>",
-        "  <trk>",
-        "    <name>SSTR 2026 Route</name>",
-        "    <trkseg>",
-        trkpt,
-        "    </trkseg>",
-        "  </trk>",
-        "</gpx>"
-      ].join("\n");
+      if (!window.html2canvas) {
+        showStatus("路线图导出组件加载失败，请刷新后重试", true);
+        return;
+      }
 
-      downloadText("my_route.gpx", gpx, "application/gpx+xml");
-      showStatus("已导出 GPX", false);
+      try {
+        showStatus("正在生成路线图，请稍候...", false);
+        const mapEl = document.getElementById("map");
+        map.closePopup();
+        const canvas = await window.html2canvas(mapEl, {
+          backgroundColor: null,
+          useCORS: true,
+          logging: false,
+          scale: window.devicePixelRatio > 1 ? 2 : 1
+        });
+        const dataUrl = canvas.toDataURL("image/png");
+        const now = new Date();
+        const stamp = now.getFullYear() +
+          String(now.getMonth() + 1).padStart(2, "0") +
+          String(now.getDate()).padStart(2, "0") + "-" +
+          String(now.getHours()).padStart(2, "0") +
+          String(now.getMinutes()).padStart(2, "0") +
+          String(now.getSeconds()).padStart(2, "0");
+
+        const a = document.createElement("a");
+        a.href = dataUrl;
+        a.download = "sstr-route-map-" + stamp + ".png";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        showStatus("已导出路线图 PNG", false);
+      } catch (err) {
+        showStatus("导出路线图失败，可能是地图瓦片跨域限制导致", true);
+      }
     }
 
     async function loadCheckpoints() {
@@ -924,6 +1266,7 @@
         }
 
         checkpointLayer = L.layerGroup();
+        goalLayer = L.layerGroup();
         allCheckpointMarkers.length = 0;
         const preview = raw.slice(0, 5000);
 
@@ -934,33 +1277,37 @@
             return;
           }
           const category = getCheckpointCategory(cp);
-          const marker = L.circleMarker([lat, lng], {
-            radius: 4,
-            color: "#ff9368",
-            fillColor: "#ff7844",
-            fillOpacity: 0.88,
-            weight: 1
-          });
 
-          marker.bindPopup(
-            "<b>" + (cp.name || "无名点") + "</b><br>" +
-            (cp.prefecture || "") + " " + (cp.address || "") +
-            "<br>分类：" + getCheckpointCategory(cp) +
-            "<br><button type=\"button\" class=\"start-from-popup\">设为起点</button> " +
-            "<button type=\"button\" class=\"add-from-popup\">加入路线</button>"
-          );
+          if (category === "ゴール地点") {
+            const goalMarker = L.marker([lat, lng], { icon: createGoalPointIcon() });
 
-          marker.on("popupopen", () => {
-            const popupEl = marker.getPopup() && marker.getPopup().getElement();
-            if (!popupEl) {
-              return;
-            }
-            const btn = popupEl.querySelector(".add-from-popup");
-            const startBtn = popupEl.querySelector(".start-from-popup");
+            const goalHitMarker = L.circleMarker([lat, lng], {
+              radius: 14,
+              color: "#000000",
+              weight: 0,
+              opacity: 0,
+              fillOpacity: 0,
+              interactive: true
+            });
 
-            if (startBtn) {
-              startBtn.addEventListener("click", () => {
-                setStartPoint(lat, lng, cp.name || "起点", {
+            goalHitMarker.bindPopup(
+              "<b>终点：" + (cp.name || "无名点") + "</b><br>" +
+              (cp.prefecture || "") + " " + (cp.address || "") +
+              "<br>分类：" + category +
+              "<button type=\"button\" class=\"add-goal-from-popup\">加入路线</button>"
+            );
+
+            goalHitMarker.on("popupopen", () => {
+              const popupEl = goalHitMarker.getPopup() && goalHitMarker.getPopup().getElement();
+              if (!popupEl) {
+                return;
+              }
+              const btn = popupEl.querySelector(".add-goal-from-popup");
+              if (!btn) {
+                return;
+              }
+              btn.addEventListener("click", () => {
+                addPoint(lat, lng, cp.name || "终点", {
                   id: cp.id,
                   kind: cp.kind,
                   checkpoint: cp.checkpoint,
@@ -971,72 +1318,125 @@
                   description: cp.description,
                   add_info: cp.add_info
                 });
-                isSettingStart = false;
-                setStartBtnEl.textContent = "设置起点";
-                setStartBtnEl.className = "primary";
+                showStatus("已添加终点到路线", false);
                 map.closePopup();
               }, { once: true });
+            });
+
+            goalLayer.addLayer(L.layerGroup([goalMarker, goalHitMarker]));
+            return;
+          }
+
+          const marker = L.circleMarker([lat, lng], {
+            radius: 6,
+            color: "#ff9368",
+            fillColor: "#ff7844",
+            fillOpacity: 0.88,
+            weight: 2
+          });
+
+          const hitMarker = L.circleMarker([lat, lng], {
+            radius: 14,
+            color: "#000000",
+            weight: 0,
+            opacity: 0,
+            fillOpacity: 0,
+            interactive: true
+          });
+
+          hitMarker.bindPopup(
+            "<b>" + (cp.name || "无名点") + "</b><br>" +
+            (cp.prefecture || "") + " " + (cp.address || "") +
+            "<br>分类：" + getCheckpointCategory(cp) +
+            "<button type=\"button\" class=\"add-from-popup\">加入路线</button>"
+          );
+
+          hitMarker.on("popupopen", () => {
+            const popupEl = hitMarker.getPopup() && hitMarker.getPopup().getElement();
+            if (!popupEl) {
+              return;
             }
+            const btn = popupEl.querySelector(".add-from-popup");
 
             if (!btn) {
               return;
             }
             btn.addEventListener("click", () => {
-              if (isSettingStart) {
-                setStartPoint(lat, lng, cp.name || "起点", {
-                  id: cp.id,
-                  kind: cp.kind,
-                  checkpoint: cp.checkpoint,
-                  start_flag: cp.start_flag,
-                  tachiyori_flag: cp.tachiyori_flag,
-                  prefecture: cp.prefecture,
-                  address: cp.address,
-                  description: cp.description,
-                  add_info: cp.add_info
-                });
-                isSettingStart = false;
-                setStartBtnEl.textContent = "设置起点";
-                setStartBtnEl.className = "primary";
-              } else {
-                addPoint(lat, lng, cp.name || "站点", {
-                  id: cp.id,
-                  kind: cp.kind,
-                  checkpoint: cp.checkpoint,
-                  start_flag: cp.start_flag,
-                  tachiyori_flag: cp.tachiyori_flag,
-                  prefecture: cp.prefecture,
-                  address: cp.address,
-                  description: cp.description,
-                  add_info: cp.add_info
-                });
-              }
+              addPoint(lat, lng, cp.name || "站点", {
+                id: cp.id,
+                kind: cp.kind,
+                checkpoint: cp.checkpoint,
+                start_flag: cp.start_flag,
+                tachiyori_flag: cp.tachiyori_flag,
+                prefecture: cp.prefecture,
+                address: cp.address,
+                description: cp.description,
+                add_info: cp.add_info
+              });
               showStatus("已添加站点到路线", false);
               map.closePopup();
             }, { once: true });
           });
 
-          allCheckpointMarkers.push({ marker: marker, category: category });
+          const pointLayer = L.layerGroup([marker, hitMarker]);
+          allCheckpointMarkers.push({ marker: pointLayer, category: category });
         });
 
         applyPointTypeFilter();
         checkpointLayer.addTo(map);
-        showStatus("点位数据已加载，可点击橙色点加入路线", false);
+        goalLayer.addTo(map);
+        showStatus("点位数据已加载，可点击橙色点加入路线，终点已在地图中独立标出", false);
       } catch (err) {
         showStatus("point.json 加载失败。若是本地打开 HTML，请改用本地服务器方式访问。", true);
       }
     }
 
     map.on("click", (e) => {
-      if (isSettingStart) {
-        setStartPoint(e.latlng.lat, e.latlng.lng, "地图点击起点");
-        isSettingStart = false;
-        setStartBtnEl.textContent = "设置起点";
-        setStartBtnEl.className = "primary";
+      if (ignoreNextMapClick) {
+        ignoreNextMapClick = false;
         return;
       }
-      addPoint(e.latlng.lat, e.latlng.lng, "地图点击点");
-      showStatus("已添加路线点", false);
+      showStatus("请点击地图上的站点点位来添加路线点", true);
     });
+
+    map.on("contextmenu", (e) => {
+      setStartPoint(e.latlng.lat, e.latlng.lng, "右键地图起点");
+      ignoreNextMapClick = true;
+      showStatus("已通过右键设置起点", false);
+    });
+
+    map.on("mousedown", (e) => {
+      if (e.originalEvent && e.originalEvent.button !== 0) {
+        return;
+      }
+      scheduleLongPressSetStart(e.latlng);
+    });
+
+    map.on("touchstart", (e) => {
+      if (e.latlng) {
+        scheduleLongPressSetStart(e.latlng);
+      }
+    });
+
+    map.on("mousemove", () => {
+      if (longPressTriggered) {
+        return;
+      }
+      clearLongPressTimer();
+    });
+
+    map.on("touchmove", () => {
+      if (longPressTriggered) {
+        return;
+      }
+      clearLongPressTimer();
+    });
+
+    map.on("dragstart", clearLongPressTimer);
+    map.on("zoomstart", clearLongPressTimer);
+    map.on("mouseup", clearLongPressTimer);
+    map.on("touchend", clearLongPressTimer);
+    map.on("touchcancel", clearLongPressTimer);
 
     typeFilterListEl.addEventListener("change", (e) => {
       const target = e.target;
@@ -1074,11 +1474,15 @@
       applyPointTypeFilter();
     });
 
-    document.getElementById("setStartBtn").addEventListener("click", toggleSetStartMode);
-    document.getElementById("undoBtn").addEventListener("click", removeLastPoint);
-    document.getElementById("clearBtn").addEventListener("click", clearRoute);
-    document.getElementById("exportGpxBtn").addEventListener("click", exportRouteAsGpx);
-    document.getElementById("locateBtn").addEventListener("click", fitToRoute);
+    document.getElementById("undoFabBtn").addEventListener("click", removeLastPoint);
+    document.getElementById("locateFabBtn").addEventListener("click", fitToRoute);
+    document.getElementById("exportMapBtn").addEventListener("click", exportRouteMapImage);
+    if (togglePanelBtnEl) {
+      togglePanelBtnEl.addEventListener("click", () => {
+        const collapsed = panelEl.classList.contains("mobile-collapsed");
+        setPanelCollapsed(!collapsed);
+      });
+    }
 
     renderTypeFilters();
     restoreRouteFromStorage();
