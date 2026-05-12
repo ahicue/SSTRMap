@@ -135,7 +135,7 @@
     }
 
     .point-list {
-      max-height: 28vh;
+      max-height: 55vh;
       overflow: auto;
       margin: 0;
       padding: 0;
@@ -428,7 +428,7 @@
       }
 
       .point-list {
-        max-height: 19vh;
+        max-height: 32vh;
       }
 
       .btns {
@@ -511,14 +511,8 @@
       </div>
 
       <div id="panelBody" class="panel-body">
-        <p class="subtitle">请通过地图上的站点点位添加路线。你也可以在地图上直接点击设置起点（仅在没有路线点时）。</p>
-
       <section class="card">
         <p class="subtitle" style="margin-bottom:8px;">按类型筛选点位</p>
-        <div class="filter-action-row" style="margin-bottom:8px;">
-          <button id="selectAllTypesBtn" class="secondary" type="button">全选</button>
-          <button id="clearTypesBtn" class="secondary" type="button">全不选</button>
-        </div>
         <div id="typeFilterList" class="type-filter-list"></div>
       </section>
 
@@ -530,14 +524,20 @@
           <div class="score-pill">总积分<strong id="scoreTotal">0 pt</strong></div>
           <div class="score-pill">路线<strong id="distanceKm">0.00 km</strong></div>
         </div>
-        <ul id="missionList" class="point-list compact-list" style="margin-bottom:8px;"></ul>
-        <p class="subtitle" style="margin-bottom:8px;">スペシャルデザイン版 追加达成</p>
-        <ul id="specialMissionList" class="point-list compact-list" style="margin-bottom:8px;"></ul>
-        <ul id="scoreBreakdown" class="point-list compact-list"></ul>
+        <button id="expandScoreDetailsBtn" class="secondary" type="button" style="width:100%;margin-bottom:8px;">▼ 展开详情</button>
+        <div id="scoreDetailsContainer" style="display:none;">
+          <ul id="missionList" class="point-list compact-list" style="margin-bottom:8px;"></ul>
+          <p class="subtitle" style="margin-bottom:8px;">スペシャルデザイン版 追加达成</p>
+          <ul id="specialMissionList" class="point-list compact-list" style="margin-bottom:8px;"></ul>
+          <ul id="scoreBreakdown" class="point-list compact-list"></ul>
+        </div>
       </section>
 
       <section class="card">
-        <p class="subtitle" style="margin-bottom:8px;">路线点列表</p>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; gap:8px;">
+          <p class="subtitle" style="margin:0;">路线点列表</p>
+          <button id="generateRouteBtn" class="primary" type="button" style="flex-shrink:0; padding:8px 12px; font-size:13px; border:none; border-radius:10px; cursor:pointer;">🚀 生成路线</button>
+        </div>
         <ul id="pointList" class="point-list"></ul>
         <p id="timeSummaryText" class="time-summary" style="margin-top:8px;">请先设置起点并添加路线点。</p>
       </section>
@@ -548,7 +548,7 @@
 
     <div class="map-wrap">
       <div id="map"></div>
-      <div class="floating-tip">无路线点时可直接点击地图设起点；点击橙色站点加入路线；右键已选路线点可删除。</div>
+      <div class="floating-tip">无路线点时可直接点击地图设起点；点击橙色站点加入路线。</div>
       <div class="map-fab-group">
         <button id="exportMapBtn" class="export-fab" type="button">导出路线图</button>
         <button id="locateFabBtn" class="locate-fab" type="button">定位</button>
@@ -570,10 +570,8 @@
     const FILTER_CATEGORIES = [
       "指定道の駅",
       "指定能登復興応援",
-      "協力道の駅",
-      "道の駅",
-      "SA",
-      "PA",
+      "その他の道の駅",
+      "SA/PA",
       "自然災害伝承碑",
       "びっくりボーナスポイント"
     ];
@@ -603,20 +601,29 @@
     const timeSummaryTextEl = document.getElementById("timeSummaryText");
     const panelEl = document.getElementById("controlPanel");
     const togglePanelBtnEl = document.getElementById("togglePanelBtn");
+    const expandScoreDetailsBtnEl = document.getElementById("expandScoreDetailsBtn");
+    const scoreDetailsContainerEl = document.getElementById("scoreDetailsContainer");
+    const generateRouteBtnEl = document.getElementById("generateRouteBtn");
 
     // 性能优化：缓存计算结果
     let cachedScoreSummary = null;
     let cachedDistanceKm = null;
     let cachedSegmentMinutes = [];
     let lastRoutePointsLength = 0;
-    
-  // 终点日落时间缓存
-  let goalSunsetTime = null;
-  let goalSunsetRequestToken = 0;
+
+    // 路线与日落缓存
+    let goalSunsetTime = null;
+    let goalSunsetRequestToken = 0;
+    const roadSegmentCache = new Map();
+    const goalSunsetCache = new Map();
+
     const map = L.map("map", {
       zoomControl: true,
-      minZoom: 3
+      minZoom: 3,
+      preferCanvas: true
     }).setView([36.2048, 138.2529], 5);
+
+    const mapCanvasRenderer = L.canvas({ padding: 0.5 });
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
@@ -644,10 +651,17 @@
       }
     }
 
+    function isMisakiPoint(point) {
+      const kind = String(point.kind || "");
+      const startFlag = String(point.start_flag || "0");
+      return kind === "3" && startFlag === "1";
+    }
+
     function getCheckpointCategory(point) {
       const kind = String(point.kind || "");
       const checkpoint = String(point.checkpoint || "0");
       const startFlag = String(point.start_flag || "0");
+      const tachiyoriFlag = String(point.tachiyori_flag || "0");
       const id = String(point.id || "");
       const desc = String(point.description || "");
 
@@ -662,6 +676,10 @@
       }
       if (checkpoint === "1") {
         return "指定道の駅";
+      }
+      // 官方协力点以 tachiyori_flag 标记，优先于普通道の駅
+      if (tachiyoriFlag === "1") {
+        return "協力道の駅";
       }
       if (kind === "3" && startFlag === "1") {
         return "びっくりボーナスポイント";
@@ -693,6 +711,9 @@
       if (category === "指定能登復興応援") {
         return { category: "指定能登復興応援ポイント", points: 3 };
       }
+      if (isMisakiPoint(point)) {
+        return { category: "岬ポイント", points: 3 };
+      }
       if (category === "びっくりボーナスポイント") {
         return { category: "びっくりボーナスポイント", points: 3 };
       }
@@ -709,6 +730,17 @@
         return { category: "ゴール地点", points: 0 };
       }
       return { category: "非计分点", points: 0 };
+    }
+
+    function getFilterCategoryFromCheckpoint(point) {
+      const category = getCheckpointCategory(point);
+      if (category === "道の駅" || category === "協力道の駅") {
+        return "その他の道の駅";
+      }
+      if (category === "SA" || category === "PA") {
+        return "SA/PA";
+      }
+      return category;
     }
 
     function getPointUniqueKey(point) {
@@ -890,6 +922,7 @@
       const orderedCategories = [
         "指定道の駅",
         "指定能登復興応援ポイント",
+        "岬ポイント",
         "その他の道の駅",
         "自然災害伝承碑ポイント",
         "SA/PA",
@@ -1070,37 +1103,24 @@
       const plan = calculateTimePlan();
       pointListEl.innerHTML = "";
 
-      // 只在有起点时显示一键生成按钮
+      // 更新顶部生成路线按钮状态
       if (routePoints.length > 0) {
         const summary = calculateScoreSummary();
         const pointsNeeded = Math.max(0, 15 - summary.totalPoints);
         
-        const generateBtnWrapper = document.createElement("li");
-        generateBtnWrapper.className = "point-item";
-        generateBtnWrapper.style.padding = "8px 10px";
-        
-        const generateBtn = document.createElement("button");
-        generateBtn.type = "button";
-        generateBtn.className = "primary";
-        
-        // 根据当前积分更新按钮文本和状态
         if (pointsNeeded <= 0) {
-          generateBtn.textContent = "✓ 已达目标 (15分)";
-          generateBtn.disabled = true;
-          generateBtn.style.opacity = "0.6";
-          generateBtn.style.cursor = "default";
+          generateRouteBtnEl.disabled = true;
+          generateRouteBtnEl.style.opacity = "0.6";
+          generateRouteBtnEl.style.cursor = "default";
         } else {
-          generateBtn.textContent = "🚀 补充路线 (需 " + pointsNeeded + " 分)";
-          generateBtn.addEventListener("click", () => {
-            autoGenerateRoute();
-          });
+          generateRouteBtnEl.disabled = false;
+          generateRouteBtnEl.style.opacity = "1";
+          generateRouteBtnEl.style.cursor = "pointer";
         }
-        
-        generateBtn.style.width = "100%";
-        generateBtn.style.marginBottom = "8px";
-
-        generateBtnWrapper.appendChild(generateBtn);
-        pointListEl.appendChild(generateBtnWrapper);
+      } else {
+        generateRouteBtnEl.disabled = true;
+        generateRouteBtnEl.style.opacity = "0.6";
+        generateRouteBtnEl.style.cursor = "default";
       }
 
       routePoints.forEach((p, i) => {
@@ -1115,7 +1135,8 @@
         const restSuffix = document.createElement("span");
         const delBtn = document.createElement("button");
         const scoreRule = getScoreRuleFromPoint(p);
-        const listLabel = i === 0 ? "S" : String(i);
+        const isGoal = getCheckpointCategory(p) === "ゴール地点";
+        const listLabel = i === 0 ? "S" : (isGoal ? "G" : String(i));
 
         item.className = "point-item";
         row.className = "point-item-row";
@@ -1136,7 +1157,11 @@
           const nonStartText = listLabel + ". " + (p.name || "自定义点") + " - " + scoreRule.category + " / " + scoreRule.points + "pt";
           if (plan && plan.entries[i]) {
             const entry = plan.entries[i];
-            text.textContent = nonStartText + " ｜ " + formatTimeLabel(entry.arrival) + "--" + formatTimeLabel(entry.departure);
+            const isGoal = getCheckpointCategory(p) === "ゴール地点";
+            const timeDisplay = isGoal ? 
+              formatTimeLabel(entry.arrival) : 
+              formatTimeLabel(entry.arrival) + "--" + formatTimeLabel(entry.departure);
+            text.textContent = nonStartText + " ｜ " + timeDisplay;
             timeMeta.textContent = "";
           } else {
             text.textContent = nonStartText;
@@ -1174,7 +1199,7 @@
         textWrap.appendChild(text);
         textWrap.appendChild(timeMeta);
         row.appendChild(textWrap);
-        if (i !== 0) {
+        if (i !== 0 && getCheckpointCategory(p) !== "ゴール地点") {
           row.appendChild(restControl);
         }
         row.appendChild(delBtn);
@@ -1237,6 +1262,76 @@
       }
     }
 
+    async function getGoalSunsetTime() {
+      if (routePoints.length < 2) {
+        goalSunsetTime = null;
+        return null;
+      }
+
+      const goal = routePoints[routePoints.length - 1];
+      if (getCheckpointCategory(goal) !== "ゴール地点") {
+        goalSunsetTime = null;
+        return null;
+      }
+
+      const dateText =
+        String(EVENT_DATE_YEAR) + "-" +
+        String(EVENT_DATE_MONTH + 1).padStart(2, "0") + "-" +
+        String(EVENT_DATE_DAY).padStart(2, "0");
+      const goalKey = Number(goal.lat).toFixed(4) + "," + Number(goal.lng).toFixed(4) + "|" + dateText;
+
+      if (goalSunsetCache.has(goalKey)) {
+        goalSunsetTime = goalSunsetCache.get(goalKey);
+        renderTimeSummary();
+        return goalSunsetTime;
+      }
+
+      const requestToken = ++goalSunsetRequestToken;
+      const url =
+        SUNRISE_API_URL +
+        "?lat=" + encodeURIComponent(String(goal.lat)) +
+        "&lng=" + encodeURIComponent(String(goal.lng)) +
+        "&date=" + encodeURIComponent(dateText) +
+        "&formatted=0";
+
+      try {
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) {
+          throw new Error("sunset http error");
+        }
+        const data = await res.json();
+        if (!data || data.status !== "OK" || !data.results || !data.results.sunset) {
+          throw new Error("sunset invalid result");
+        }
+
+        const sunsetUtc = new Date(data.results.sunset);
+        if (!Number.isFinite(sunsetUtc.getTime())) {
+          throw new Error("sunset invalid date");
+        }
+
+        if (requestToken !== goalSunsetRequestToken || routePoints.length < 2) {
+          return null;
+        }
+
+        const sunsetLocal = new Date(
+          EVENT_DATE_YEAR,
+          EVENT_DATE_MONTH,
+          EVENT_DATE_DAY,
+          sunsetUtc.getHours(),
+          sunsetUtc.getMinutes(),
+          0,
+          0
+        );
+        goalSunsetTime = sunsetLocal;
+        goalSunsetCache.set(goalKey, sunsetLocal);
+        renderTimeSummary();
+        return sunsetLocal;
+      } catch (err) {
+        goalSunsetTime = null;
+        return null;
+      }
+    }
+
     function getStraightRouteData(points) {
       const latLngs = points.map((p) => [p.lat, p.lng]);
       return {
@@ -1251,6 +1346,13 @@
       const fromLat = Number(fromPoint.lat);
       const toLng = Number(toPoint.lng);
       const toLat = Number(toPoint.lat);
+
+      const cacheKey =
+        fromLat.toFixed(5) + "," + fromLng.toFixed(5) + "->" + toLat.toFixed(5) + "," + toLng.toFixed(5);
+      if (roadSegmentCache.has(cacheKey)) {
+        return roadSegmentCache.get(cacheKey);
+      }
+
       const url = OSRM_BASE_URL +
         "/route/v1/driving/" +
         fromLng + "," + fromLat + ";" + toLng + "," + toLat +
@@ -1270,11 +1372,19 @@
       }
 
       const latLngs = route.geometry.coordinates.map((coord) => [coord[1], coord[0]]);
-      return {
+      const segmentResult = {
         latLngs: latLngs,
         distanceKm: Number(route.distance || 0) / 1000,
         durationMinutes: Number(route.duration || 0) / 60
       };
+
+      roadSegmentCache.set(cacheKey, segmentResult);
+      if (roadSegmentCache.size > 400) {
+        const oldestKey = roadSegmentCache.keys().next().value;
+        roadSegmentCache.delete(oldestKey);
+      }
+
+      return segmentResult;
     }
 
     async function getRoadRouteData(points, renderToken) {
@@ -1332,7 +1442,6 @@
       // 性能优化：清除缓存
       cachedScoreSummary = null;
       cachedDistanceKm = null;
-      goalSunsetTime = null;
       
       routeMarkers.forEach((marker) => map.removeLayer(marker));
       routeMarkers.length = 0;
@@ -1344,14 +1453,15 @@
 
       routePoints.forEach((p, i) => {
         const isStart = i === 0;
+        const isGoal = getCheckpointCategory(p) === "ゴール地点";
         const markerNumber = isStart ? 0 : i;
         const marker = L.marker([p.lat, p.lng], {
-          icon: createRouteIcon(markerNumber, isStart),
-          zIndexOffset: isStart ? 50000 : 10000
+          icon: isGoal ? createGoalPointIcon() : createRouteIcon(markerNumber, isStart),
+          zIndexOffset: isStart ? 50000 : (isGoal ? 40000 : 10000)
         })
           .addTo(map)
           .bindPopup(
-            (isStart ? "起点" : "第 " + i + " 点") +
+            (isStart ? "起点" : (isGoal ? "终点" : "第 " + i + " 点")) +
             "<BR>" +
             (p.name || "自定义点") +
             "<br>" +
@@ -1374,12 +1484,6 @@
             deletePointAt(i);
             map.closePopup();
           });
-        });
-        marker.on("contextmenu", () => {
-          const label = (isStart ? "起点" : "第 " + i + " 点") + " " + (p.name || "自定义点");
-          if (window.confirm("删除该路线点？\n" + label)) {
-            deletePointAt(i);
-          }
         });
         routeMarkers.push(marker);
       });
@@ -1622,10 +1726,30 @@
 
       const routeShape = routeLatLngs.map((ll) => ({ lat: Number(ll[0]), lng: Number(ll[1]) }));
 
-      function getNearestRouteInfo(point) {
+      // 分段近似索引：先定位最可能的路线段，再做局部扫描
+      const ROUTE_BUCKET_SIZE = 24;
+      const routeBuckets = [];
+      for (let start = 0; start < routeShape.length; start += ROUTE_BUCKET_SIZE) {
+        const end = Math.min(routeShape.length - 1, start + ROUTE_BUCKET_SIZE - 1);
+        let latSum = 0;
+        let lngSum = 0;
+        let count = 0;
+        for (let i = start; i <= end; i += 1) {
+          latSum += routeShape[i].lat;
+          lngSum += routeShape[i].lng;
+          count += 1;
+        }
+        routeBuckets.push({
+          start: start,
+          end: end,
+          center: { lat: latSum / count, lng: lngSum / count }
+        });
+      }
+
+      function scanRouteRange(point, startIndex, endIndex) {
         let minDist = Infinity;
-        let minIndex = 0;
-        for (let i = 0; i < routeShape.length; i += 1) {
+        let minIndex = startIndex;
+        for (let i = startIndex; i <= endIndex; i += 1) {
           const d = haversineDistanceKm(point, routeShape[i]);
           if (d < minDist) {
             minDist = d;
@@ -1633,6 +1757,30 @@
           }
         }
         return { distKm: minDist, routeIndex: minIndex };
+      }
+
+      function getNearestRouteInfo(point) {
+        if (routeShape.length <= 80 || routeBuckets.length <= 1) {
+          return scanRouteRange(point, 0, routeShape.length - 1);
+        }
+
+        // 先用桶中心点找最近桶
+        let nearestBucketIndex = 0;
+        let nearestBucketDist = Infinity;
+        for (let i = 0; i < routeBuckets.length; i += 1) {
+          const d = haversineDistanceKm(point, routeBuckets[i].center);
+          if (d < nearestBucketDist) {
+            nearestBucketDist = d;
+            nearestBucketIndex = i;
+          }
+        }
+
+        // 扩展到相邻桶做局部精扫（近似索引）
+        const leftBucket = Math.max(0, nearestBucketIndex - 1);
+        const rightBucket = Math.min(routeBuckets.length - 1, nearestBucketIndex + 1);
+        const scanStart = routeBuckets[leftBucket].start;
+        const scanEnd = routeBuckets[rightBucket].end;
+        return scanRouteRange(point, scanStart, scanEnd);
       }
 
       function collectNearbyCandidates(corridorKm) {
@@ -2087,10 +2235,14 @@
         preview.forEach((cp) => {
           const lat = Number(cp.lat);
           const lng = Number(cp.lon);
+          const hidden = String(cp.hidden || "0");
           if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
             return;
           }
-          const category = getCheckpointCategory(cp);
+          if (hidden === "1") {
+            return;
+          }
+          const category = getFilterCategoryFromCheckpoint(cp);
 
           // 保存检查点数据以供自动生成使用
           allAvailableCheckpoints.push({
@@ -2164,7 +2316,8 @@
             color: "#ff9368",
             fillColor: "#ff7844",
             fillOpacity: 0.88,
-            weight: 2
+            weight: 2,
+            renderer: mapCanvasRenderer
           });
 
           const hitMarker = L.circleMarker([lat, lng], {
@@ -2173,7 +2326,8 @@
             weight: 0,
             opacity: 0,
             fillOpacity: 0,
-            interactive: true
+            interactive: true,
+            renderer: mapCanvasRenderer
           });
 
           hitMarker.bindPopup(
@@ -2251,32 +2405,28 @@
       applyPointTypeFilter();
     });
 
-    document.getElementById("selectAllTypesBtn").addEventListener("click", () => {
-      selectedCategories.clear();
-      FILTER_CATEGORIES.forEach((c) => selectedCategories.add(c));
-      const boxes = typeFilterListEl.querySelectorAll("input[type='checkbox']");
-      boxes.forEach((box) => {
-        box.checked = true;
-      });
-      applyPointTypeFilter();
-    });
-
-    document.getElementById("clearTypesBtn").addEventListener("click", () => {
-      selectedCategories.clear();
-      const boxes = typeFilterListEl.querySelectorAll("input[type='checkbox']");
-      boxes.forEach((box) => {
-        box.checked = false;
-      });
-      applyPointTypeFilter();
-    });
-
     document.getElementById("undoFabBtn").addEventListener("click", removeLastPoint);
     document.getElementById("locateFabBtn").addEventListener("click", fitToRoute);
     document.getElementById("exportMapBtn").addEventListener("click", exportRouteMapImage);
+    if (generateRouteBtnEl) {
+      generateRouteBtnEl.addEventListener("click", () => {
+        if (!generateRouteBtnEl.disabled) {
+          autoGenerateRoute();
+        }
+      });
+    }
     if (togglePanelBtnEl) {
       togglePanelBtnEl.addEventListener("click", () => {
         const collapsed = panelEl.classList.contains("mobile-collapsed");
         setPanelCollapsed(!collapsed);
+      });
+    }
+
+    if (expandScoreDetailsBtnEl) {
+      expandScoreDetailsBtnEl.addEventListener("click", () => {
+        const isHidden = scoreDetailsContainerEl.style.display === "none";
+        scoreDetailsContainerEl.style.display = isHidden ? "block" : "none";
+        expandScoreDetailsBtnEl.textContent = isHidden ? "▲ 收起详情" : "▼ 展开详情";
       });
     }
 
@@ -2288,63 +2438,3 @@
   </script>
 </body>
 </html>
-
-    async function getGoalSunsetTime() {
-      if (routePoints.length < 2) {
-        goalSunsetTime = null;
-        return null;
-      }
-      const requestToken = ++goalSunsetRequestToken;
-      const goal = routePoints[routePoints.length - 1];
-      const dateText =
-        String(EVENT_DATE_YEAR) + "-" +
-        String(EVENT_DATE_MONTH + 1).padStart(2, "0") + "-" +
-        String(EVENT_DATE_DAY).padStart(2, "0");
-      const url =
-        SUNRISE_API_URL +
-        "?lat=" + encodeURIComponent(String(goal.lat)) +
-        "&lng=" + encodeURIComponent(String(goal.lng)) +
-        "&date=" + encodeURIComponent(dateText) +
-        "&formatted=0";
-
-      try {
-        const res = await fetch(url, { cache: "no-store" });
-        if (!res.ok) {
-          throw new Error("sunset http error");
-        }
-        const data = await res.json();
-        if (!data || data.status !== "OK" || !data.results || !data.results.sunset) {
-          throw new Error("sunset invalid result");
-        }
-        const sunsetUtc = new Date(data.results.sunset);
-        if (!Number.isFinite(sunsetUtc.getTime())) {
-          throw new Error("sunset invalid date");
-        }
-
-        if (requestToken !== goalSunsetRequestToken || routePoints.length < 2) {
-          return null;
-        }
-
-        const sunsetLocal = new Date(
-          EVENT_DATE_YEAR,
-          EVENT_DATE_MONTH,
-          EVENT_DATE_DAY,
-          sunsetUtc.getHours(),
-          sunsetUtc.getMinutes(),
-          0,
-          0
-        );
-        goalSunsetTime = sunsetLocal;
-        return sunsetLocal;
-      } catch (err) {
-        goalSunsetTime = null;
-        return null;
-      }
-        // 日落时间获取成功，更新显示
-        renderTimeSummary();
-        return sunsetLocal;
-      } catch (err) {
-        goalSunsetTime = null;
-        return null;
-      }
-    }
