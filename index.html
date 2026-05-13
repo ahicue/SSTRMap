@@ -636,6 +636,15 @@
       statusTextEl.style.color = isError ? "#b94728" : "#556f65";
     }
 
+    function escapeHtml(value) {
+      return String(value == null ? "" : value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
     function setPanelCollapsed(collapsed) {
       if (!panelEl || !togglePanelBtnEl) {
         return;
@@ -1106,9 +1115,12 @@
       // 更新顶部生成路线按钮状态
       if (routePoints.length > 0) {
         const summary = calculateScoreSummary();
-        const pointsNeeded = Math.max(0, 15 - summary.totalPoints);
+        const canAutoGenerate =
+          summary.totalPoints < 15 ||
+          summary.designatedCount < 1 ||
+          summary.notoCount < 1;
         
-        if (pointsNeeded <= 0) {
+        if (!canAutoGenerate) {
           generateRouteBtnEl.disabled = true;
           generateRouteBtnEl.style.opacity = "0.6";
           generateRouteBtnEl.style.cursor = "default";
@@ -2009,6 +2021,7 @@
         if (!points) {
           return;
         }
+        routePoints.length = 0;
         points.forEach((p) => {
           if (Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng))) {
             routePoints.push({
@@ -2261,21 +2274,32 @@
           });
 
           if (category === "ゴール地点") {
-            const goalMarker = L.marker([lat, lng], { icon: createGoalPointIcon() });
+            const goalMarker = L.marker([lat, lng], {
+              icon: createGoalPointIcon(),
+              interactive: false,
+              bubblingMouseEvents: false
+            });
 
             const goalHitMarker = L.circleMarker([lat, lng], {
               radius: 14,
               color: "#000000",
-              weight: 0,
-              opacity: 0,
-              fillOpacity: 0,
-              interactive: true
+              weight: 1,
+              opacity: 0.01,
+              fillColor: "#000000",
+              fillOpacity: 0.01,
+              interactive: true,
+              bubblingMouseEvents: false
             });
 
+            const safeName = escapeHtml(cp.name || "无名点");
+            const safePrefecture = escapeHtml(cp.prefecture || "");
+            const safeAddress = escapeHtml(cp.address || "");
+            const safeCategory = escapeHtml(category);
+
             goalHitMarker.bindPopup(
-              "<b>终点：" + (cp.name || "无名点") + "</b><br>" +
-              (cp.prefecture || "") + " " + (cp.address || "") +
-              "<br>分类：" + category +
+              "<b>终点：" + safeName + "</b><br>" +
+              safePrefecture + " " + safeAddress +
+              "<br>分类：" + safeCategory +
               "<button type=\"button\" class=\"add-goal-from-popup\">加入路线</button>"
             );
 
@@ -2317,23 +2341,32 @@
             fillColor: "#ff7844",
             fillOpacity: 0.88,
             weight: 2,
+            interactive: false,
+            bubblingMouseEvents: false,
             renderer: mapCanvasRenderer
           });
 
           const hitMarker = L.circleMarker([lat, lng], {
             radius: 14,
             color: "#000000",
-            weight: 0,
-            opacity: 0,
-            fillOpacity: 0,
+            weight: 1,
+            opacity: 0.01,
+            fillColor: "#000000",
+            fillOpacity: 0.01,
             interactive: true,
+            bubblingMouseEvents: false,
             renderer: mapCanvasRenderer
           });
 
+          const safeName = escapeHtml(cp.name || "无名点");
+          const safePrefecture = escapeHtml(cp.prefecture || "");
+          const safeAddress = escapeHtml(cp.address || "");
+          const safeCheckpointCategory = escapeHtml(getCheckpointCategory(cp));
+
           hitMarker.bindPopup(
-            "<b>" + (cp.name || "无名点") + "</b><br>" +
-            (cp.prefecture || "") + " " + (cp.address || "") +
-            "<br>分类：" + getCheckpointCategory(cp) +
+            "<b>" + safeName + "</b><br>" +
+            safePrefecture + " " + safeAddress +
+            "<br>分类：" + safeCheckpointCategory +
             "<button type=\"button\" class=\"add-from-popup\">加入路线</button>"
           );
 
@@ -2374,7 +2407,13 @@
         goalLayer.addTo(map);
         showStatus("点位数据已加载，可点击橙色点加入路线，终点已在地图中独立标出", false);
       } catch (err) {
-        showStatus("point.json 加载失败。若是本地打开 HTML，请改用本地服务器方式访问。", true);
+        const isFileProtocol = window.location && window.location.protocol === "file:";
+        showStatus(
+          isFileProtocol
+            ? "point.json 加载失败：当前是直接打开本地 HTML。请改用本地服务器访问。"
+            : "point.json 加载失败，请刷新后重试。",
+          true
+        );
       }
     }
 
@@ -2432,7 +2471,6 @@
 
     renderTypeFilters();
     restoreRouteFromStorage();
-    redrawRoute();
     renderTimeSummary();
     loadCheckpoints();
   </script>
