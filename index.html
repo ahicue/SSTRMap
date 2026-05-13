@@ -591,8 +591,16 @@
       "その他の道の駅",
       "SA/PA",
       "自然災害伝承碑",
-      "びっくりボーナスポイント"
+      "びっくりボーナスポイント（含む岬ポイント）"
     ];
+    const FILTER_CATEGORY_COLORS = {
+      "指定道の駅": { stroke: "#1766d1", fill: "#4d8eff" },
+      "指定能登復興応援": { stroke: "#c5426d", fill: "#ef6d99" },
+      "その他の道の駅": { stroke: "#d66a34", fill: "#ff8a57" },
+      "SA/PA": { stroke: "#2d8a7c", fill: "#49b8a5" },
+      "自然災害伝承碑": { stroke: "#6b53b8", fill: "#8f78db" },
+      "びっくりボーナスポイント（含む岬ポイント）": { stroke: "#b8860b", fill: "#f2c94c" }
+    };
     const SPECIAL_MISSION_DEFS = [
       { id: "michi-no-eki-20", text: "★★★ 道の駅 20ヶ所以上", countKey: "michiNoEkiCount", target: 20 },
       { id: "designated-5", text: "★★☆ 指定道の駅 5ヶ所以上", countKey: "designatedCount", target: 5 },
@@ -773,6 +781,9 @@
       }
       if (category === "SA" || category === "PA") {
         return "SA/PA";
+      }
+      if (category === "びっくりボーナスポイント" || category === "岬ポイント") {
+        return "びっくりボーナスポイント（含む岬ポイント）";
       }
       return category;
     }
@@ -2413,6 +2424,10 @@
             return;
           }
           const category = getFilterCategoryFromCheckpoint(cp);
+          const markerColors = FILTER_CATEGORY_COLORS[category] || {
+            stroke: "#d66a34",
+            fill: "#ff8a57"
+          };
 
           // 保存检查点数据以供自动生成使用
           allAvailableCheckpoints.push({
@@ -2496,8 +2511,8 @@
 
           const marker = L.circleMarker([lat, lng], {
             radius: 6,
-            color: "#ff9368",
-            fillColor: "#ff7844",
+            color: markerColors.stroke,
+            fillColor: markerColors.fill,
             fillOpacity: 0.88,
             weight: 2,
             interactive: true,
