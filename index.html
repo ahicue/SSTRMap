@@ -2314,7 +2314,9 @@
                 return;
               }
               btn.dataset.bound = "true";
-              btn.addEventListener("click", function() {
+              btn.addEventListener("click", function(event) {
+                event.preventDefault();
+                event.stopPropagation();
                 addPoint(lat, lng, cp.name || "终点", {
                   id: cp.id,
                   kind: cp.kind,
@@ -2381,7 +2383,9 @@
               return;
             }
             btn.dataset.bound = "true";
-            btn.addEventListener("click", function() {
+            btn.addEventListener("click", function(event) {
+              event.preventDefault();
+              event.stopPropagation();
               addPoint(lat, lng, cp.name || "站点", {
                 id: cp.id,
                 kind: cp.kind,
