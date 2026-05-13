@@ -174,6 +174,23 @@
       margin: 0;
     }
 
+    .special-mission-option {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .special-mission-option input {
+      margin: 2px 0 0;
+      flex-shrink: 0;
+    }
+
+    .special-mission-text {
+      flex: 1;
+      min-width: 0;
+      line-height: 1.45;
+    }
+
     .score-card {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -576,11 +593,19 @@
       "自然災害伝承碑",
       "びっくりボーナスポイント"
     ];
+    const SPECIAL_MISSION_DEFS = [
+      { id: "michi-no-eki-20", text: "★★★ 道の駅 20ヶ所以上", countKey: "michiNoEkiCount", target: 20 },
+      { id: "designated-5", text: "★★☆ 指定道の駅 5ヶ所以上", countKey: "designatedCount", target: 5 },
+      { id: "disaster-5", text: "★★☆ 自然災害伝承碑 5ヶ所以上", countKey: "disasterCount", target: 5 },
+      { id: "noto-10", text: "★★☆ 指定能登復興応援ポイント 10ヶ所以上", countKey: "notoCount", target: 10 },
+      { id: "surprise-5", text: "★★☆ びっくりボーナスポイント 5ヶ所以上", countKey: "surpriseCount", target: 5 }
+    ];
 
     const routePoints = [];
     const routeMarkers = [];
     const allCheckpointMarkers = [];
     const selectedCategories = new Set(FILTER_CATEGORIES);
+    const selectedSpecialMissionIds = new Set();
     let routeLine = null;
     let checkpointLayer = null;
     let goalLayer = null;
@@ -765,6 +790,78 @@
       return null;
     }
 
+    function getSpecialMissionProgress(summary, countKey) {
+      return Number(summary && summary[countKey] ? summary[countKey] : 0);
+    }
+
+    function getSelectedSpecialMissionDefs() {
+      return SPECIAL_MISSION_DEFS.filter((mission) => selectedSpecialMissionIds.has(mission.id));
+    }
+
+    function hasUnmetSelectedSpecialMissions(summary) {
+      return getSelectedSpecialMissionDefs().some((mission) => {
+        return getSpecialMissionProgress(summary, mission.countKey) < mission.target;
+      });
+    }
+
+    function pointMatchesCountKey(point, countKey) {
+      const checkpointCategory = getCheckpointCategory(point);
+      if (countKey === "designatedCount") {
+        return getScoreRuleFromPoint(point).category === "指定道の駅";
+      }
+      if (countKey === "notoCount") {
+        return getScoreRuleFromPoint(point).category === "指定能登復興応援ポイント";
+      }
+      if (countKey === "disasterCount") {
+        return checkpointCategory === "自然災害伝承碑";
+      }
+      if (countKey === "surpriseCount") {
+        return checkpointCategory === "びっくりボーナスポイント";
+      }
+      if (countKey === "michiNoEkiCount") {
+        return (
+          checkpointCategory === "道の駅" ||
+          checkpointCategory === "協力道の駅" ||
+          checkpointCategory === "指定道の駅" ||
+          checkpointCategory === "指定能登復興応援"
+        );
+      }
+      return false;
+    }
+
+    function applyPointProgress(summary, point, rule) {
+      if (!summary || !rule || rule.points <= 0) {
+        return;
+      }
+      summary.totalPoints += rule.points;
+      summary.countedStops += 1;
+      summary.categoryCount[rule.category] = (summary.categoryCount[rule.category] || 0) + 1;
+      summary.categoryPoints[rule.category] = (summary.categoryPoints[rule.category] || 0) + rule.points;
+
+      if (rule.category === "指定道の駅") {
+        summary.designatedCount += 1;
+      }
+      if (rule.category === "指定能登復興応援ポイント") {
+        summary.notoCount += 1;
+      }
+
+      const checkpointCategory = getCheckpointCategory(point);
+      if (
+        checkpointCategory === "道の駅" ||
+        checkpointCategory === "協力道の駅" ||
+        checkpointCategory === "指定道の駅" ||
+        checkpointCategory === "指定能登復興応援"
+      ) {
+        summary.michiNoEkiCount += 1;
+      }
+      if (checkpointCategory === "自然災害伝承碑") {
+        summary.disasterCount += 1;
+      }
+      if (checkpointCategory === "びっくりボーナスポイント") {
+        summary.surpriseCount += 1;
+      }
+    }
+
     function renderTypeFilters() {
       typeFilterListEl.innerHTML = "";
       FILTER_CATEGORIES.forEach((category, index) => {
@@ -893,39 +990,40 @@
         missionListEl.appendChild(li);
       });
 
-      const specialRows = [
-        {
-          text: "★☆☆ 道の駅 20ヶ所以上",
-          ok: summary.michiNoEkiCount >= 20,
-          suffix: "（当前 " + summary.michiNoEkiCount + "）"
-        },
-        {
-          text: "★★☆ 指定道の駅 5ヶ所以上",
-          ok: summary.designatedCount >= 5,
-          suffix: "（当前 " + summary.designatedCount + "）"
-        },
-        {
-          text: "★★☆ 自然災害伝承碑 5ヶ所以上",
-          ok: summary.disasterCount >= 5,
-          suffix: "（当前 " + summary.disasterCount + "）"
-        },
-        {
-          text: "★★★ 指定能登復興応援ポイント 10ヶ所以上",
-          ok: summary.notoCount >= 10,
-          suffix: "（当前 " + summary.notoCount + "）"
-        },
-        {
-          text: "★★★ びっくりボーナスポイント 5ヶ所以上",
-          ok: summary.surpriseCount >= 5,
-          suffix: "（当前 " + summary.surpriseCount + "）"
-        }
-      ];
-
       specialMissionListEl.innerHTML = "";
-      specialRows.forEach((row) => {
+      SPECIAL_MISSION_DEFS.forEach((row) => {
+        const current = getSpecialMissionProgress(summary, row.countKey);
+        const ok = current >= row.target;
         const li = document.createElement("li");
         li.className = "point-item";
-        li.innerHTML = row.text + " " + row.suffix + " <span class=\"" + (row.ok ? "mission-ok" : "mission-ng") + "\">" + (row.ok ? "达成" : "未达成") + "</span>";
+
+        const label = document.createElement("label");
+        label.className = "special-mission-option";
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = selectedSpecialMissionIds.has(row.id);
+        checkbox.addEventListener("change", () => {
+          if (checkbox.checked) {
+            selectedSpecialMissionIds.add(row.id);
+          } else {
+            selectedSpecialMissionIds.delete(row.id);
+          }
+          saveRouteToStorage();
+          renderScoreBoard();
+          renderRoutePointList();
+        });
+
+        const text = document.createElement("span");
+        text.className = "special-mission-text";
+        text.innerHTML =
+          row.text +
+          " （当前 " + current + "） " +
+          "<span class=\"" + (ok ? "mission-ok" : "mission-ng") + "\">" + (ok ? "达成" : "未达成") + "</span>";
+
+        label.appendChild(checkbox);
+        label.appendChild(text);
+        li.appendChild(label);
         specialMissionListEl.appendChild(li);
       });
 
@@ -1119,7 +1217,8 @@
         const canAutoGenerate =
           summary.totalPoints < 15 ||
           summary.designatedCount < 1 ||
-          summary.notoCount < 1;
+          summary.notoCount < 1 ||
+          hasUnmetSelectedSpecialMissions(summary);
         
         if (!canAutoGenerate) {
           generateRouteBtnEl.disabled = true;
@@ -1719,10 +1818,18 @@
 
       // 当前已达成情况（不包含终点）
       const currentSummary = calculateScoreSummary();
-      let currentPoints = currentSummary.totalPoints;
-      let needDesignated = currentSummary.designatedCount < 1;
-      let needNoto = currentSummary.notoCount < 1;
-      let pointsNeeded = Math.max(0, 15 - currentPoints);
+      const progress = {
+        totalPoints: currentSummary.totalPoints,
+        countedStops: currentSummary.countedStops,
+        categoryCount: Object.assign({}, currentSummary.categoryCount),
+        categoryPoints: Object.assign({}, currentSummary.categoryPoints),
+        designatedCount: currentSummary.designatedCount,
+        notoCount: currentSummary.notoCount,
+        michiNoEkiCount: currentSummary.michiNoEkiCount,
+        disasterCount: currentSummary.disasterCount,
+        surpriseCount: currentSummary.surpriseCount
+      };
+      let pointsNeeded = Math.max(0, 15 - progress.totalPoints);
 
       // 1) 先导航到终点：拿到锚点->终点的主路线
       let routeLatLngs = [];
@@ -1828,6 +1935,15 @@
       const selected = [];
       const selectedKeys = new Set();
 
+      function applyPicked(item) {
+        selected.push(item);
+        if (item.key) {
+          selectedKeys.add(item.key);
+        }
+        applyPointProgress(progress, item.cp, item.rule);
+        pointsNeeded = Math.max(0, 15 - progress.totalPoints);
+      }
+
       function pickOneGlobalByCategory(categoryName) {
         const pool = allAvailableCheckpoints
           .filter((cp) => {
@@ -1866,12 +1982,7 @@
         }
 
         const picked = pool[0];
-        selected.push(picked);
-        if (picked.key) {
-          selectedKeys.add(picked.key);
-        }
-        currentPoints += picked.rule.points;
-        pointsNeeded = Math.max(0, 15 - currentPoints);
+        applyPicked(picked);
         return picked;
       }
 
@@ -1888,54 +1999,91 @@
           return null;
         }
         const picked = pool[0];
-        selected.push(picked);
-        if (picked.key) {
-          selectedKeys.add(picked.key);
-        }
-        currentPoints += picked.rule.points;
-        pointsNeeded = Math.max(0, 15 - currentPoints);
+        applyPicked(picked);
         return picked;
       }
 
-      // 先满足两个硬条件
-      if (needDesignated) {
-        const got = pickOne((item) => item.rule.category === "指定道の駅");
-        if (got) {
-          needDesignated = false;
+      function pickOneGlobalByCountKey(countKey) {
+        const pool = allAvailableCheckpoints
+          .filter((cp) => {
+            if (getCheckpointCategory(cp) === "ゴール地点") {
+              return false;
+            }
+            const key = getPointUniqueKey(cp);
+            if (key && existingKeys.has(key)) {
+              return false;
+            }
+            if (key && selectedKeys.has(key)) {
+              return false;
+            }
+            const rule = getScoreRuleFromPoint(cp);
+            return rule.points > 0 && pointMatchesCountKey(cp, countKey);
+          })
+          .map((cp) => {
+            const info = getNearestRouteInfo(cp);
+            return {
+              cp: cp,
+              rule: getScoreRuleFromPoint(cp),
+              key: getPointUniqueKey(cp),
+              distKm: info.distKm,
+              routeIndex: info.routeIndex
+            };
+          })
+          .sort((a, b) => {
+            if (a.distKm !== b.distKm) {
+              return a.distKm - b.distKm;
+            }
+            return a.routeIndex - b.routeIndex;
+          });
+
+        if (!pool.length) {
+          return null;
         }
-      }
-      if (needNoto) {
-        const got = pickOne((item) => item.rule.category === "指定能登復興応援ポイント");
-        if (got) {
-          needNoto = false;
-        }
+
+        const picked = pool[0];
+        applyPicked(picked);
+        return picked;
       }
 
-      // 主路线附近无法满足时，放宽到全量数据，但仍按“离主路线近”优先
-      if (needDesignated) {
-        const got = pickOneGlobalByCategory("指定道の駅");
-        if (got) {
-          needDesignated = false;
-        }
-      }
-      if (needNoto) {
-        const got = pickOneGlobalByCategory("指定能登復興応援ポイント");
-        if (got) {
-          needNoto = false;
-        }
+      const requiredTargets = new Map();
+
+      function requireTarget(countKey, target) {
+        requiredTargets.set(countKey, Math.max(requiredTargets.get(countKey) || 0, target));
       }
 
-      // 硬条件必须满足：否则回滚并退出
-      if (needDesignated || needNoto) {
+      requireTarget("designatedCount", 1);
+      requireTarget("notoCount", 1);
+      getSelectedSpecialMissionDefs().forEach((mission) => {
+        requireTarget(mission.countKey, mission.target);
+      });
+
+      Array.from(requiredTargets.entries()).forEach(([countKey, target]) => {
+        while (getSpecialMissionProgress(progress, countKey) < target) {
+          const got =
+            pickOne((item) => pointMatchesCountKey(item.cp, countKey)) ||
+            pickOneGlobalByCountKey(countKey);
+          if (!got) {
+            break;
+          }
+        }
+      });
+
+      const selectedMissionDefs = getSelectedSpecialMissionDefs();
+      const unmetSelectedMissions = selectedMissionDefs.filter((mission) => {
+        return getSpecialMissionProgress(progress, mission.countKey) < mission.target;
+      });
+      const unmetBaseRequirements = [];
+      if (progress.designatedCount < 1 && !selectedMissionDefs.some((mission) => mission.countKey === "designatedCount")) {
+        unmetBaseRequirements.push("指定道の駅至少 1 个");
+      }
+      if (progress.notoCount < 1 && !selectedMissionDefs.some((mission) => mission.countKey === "notoCount")) {
+        unmetBaseRequirements.push("指定能登復興応援ポイント至少 1 个");
+      }
+
+      if (unmetSelectedMissions.length || unmetBaseRequirements.length) {
         restoreRemovedGoals();
-        const miss = [];
-        if (needDesignated) {
-          miss.push("指定道の駅至少 1 个");
-        }
-        if (needNoto) {
-          miss.push("指定能登復興応援ポイント至少 1 个");
-        }
-        showStatus("自动补充失败：无法满足硬条件（" + miss.join("，") + "）", true);
+        const miss = unmetBaseRequirements.concat(unmetSelectedMissions.map((mission) => mission.text));
+        showStatus("自动补充失败：无法满足目标（" + miss.join("，") + "）", true);
         return;
       }
 
@@ -1955,12 +2103,7 @@
 
         for (let i = 0; i < remain.length && pointsNeeded > 0; i += 1) {
           const item = remain[i];
-          selected.push(item);
-          if (item.key) {
-            selectedKeys.add(item.key);
-          }
-          currentPoints += item.rule.points;
-          pointsNeeded = Math.max(0, 15 - currentPoints);
+          applyPicked(item);
         }
       }
 
@@ -1981,8 +2124,11 @@
       collapsePanelOnMobile();
 
       const finalSummary = calculateScoreSummary();
-      const reqOk = finalSummary.designatedCount >= 1 && finalSummary.notoCount >= 1;
-      const reqText = reqOk ? "，硬条件已满足" : "，但硬条件仍未完全满足";
+      const reqOk =
+        finalSummary.designatedCount >= 1 &&
+        finalSummary.notoCount >= 1 &&
+        !hasUnmetSelectedSpecialMissions(finalSummary);
+      const reqText = reqOk ? "，目标已满足" : "，但目标仍未完全满足";
       showStatus(
         "已沿终点主路线补充 " + selected.length + " 个点，当前总积分 " + finalSummary.totalPoints + " pt，终点已追加" + reqText,
         !reqOk
@@ -2008,7 +2154,10 @@
     }
 
     function saveRouteToStorage() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ routePoints: routePoints }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        routePoints: routePoints,
+        selectedSpecialMissionIds: Array.from(selectedSpecialMissionIds)
+      }));
     }
 
     function restoreRouteFromStorage() {
@@ -2019,6 +2168,14 @@
       try {
         const parsed = JSON.parse(raw);
         const points = Array.isArray(parsed) ? parsed : parsed && Array.isArray(parsed.routePoints) ? parsed.routePoints : null;
+        const savedMissionIds =
+          parsed && Array.isArray(parsed.selectedSpecialMissionIds) ? parsed.selectedSpecialMissionIds : [];
+        selectedSpecialMissionIds.clear();
+        savedMissionIds.forEach((id) => {
+          if (SPECIAL_MISSION_DEFS.some((mission) => mission.id === id)) {
+            selectedSpecialMissionIds.add(id);
+          }
+        });
         if (!points) {
           return;
         }
