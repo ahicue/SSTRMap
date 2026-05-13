@@ -2343,18 +2343,6 @@
             fillColor: "#ff7844",
             fillOpacity: 0.88,
             weight: 2,
-            interactive: false,
-            bubblingMouseEvents: false,
-            renderer: mapCanvasRenderer
-          });
-
-          const hitMarker = L.circleMarker([lat, lng], {
-            radius: 14,
-            color: "#000000",
-            weight: 1,
-            opacity: 0.01,
-            fillColor: "#000000",
-            fillOpacity: 0.01,
             interactive: true,
             bubblingMouseEvents: false,
             renderer: mapCanvasRenderer
@@ -2365,7 +2353,7 @@
           const safeAddress = escapeHtml(cp.address || "");
           const safeCheckpointCategory = escapeHtml(getCheckpointCategory(cp));
 
-          hitMarker.bindPopup(
+          marker.bindPopup(
             "<b>" + safeName + "</b><br>" +
             safePrefecture + " " + safeAddress +
             "<br>分类：" + safeCheckpointCategory +
@@ -2373,7 +2361,7 @@
           );
 
           // 性能优化：使用事件委托和防止重复监听
-          hitMarker.on("popupopen", function onPopupOpen() {
+          marker.on("popupopen", function onPopupOpen() {
             const popupEl = this.getPopup() && this.getPopup().getElement();
             if (!popupEl) {
               return;
@@ -2402,8 +2390,7 @@
             });
           });
 
-          const pointLayer = L.layerGroup([marker, hitMarker]);
-          allCheckpointMarkers.push({ marker: pointLayer, category: category });
+          allCheckpointMarkers.push({ marker: marker, category: category });
         });
 
         applyPointTypeFilter();
